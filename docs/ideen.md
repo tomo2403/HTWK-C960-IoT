@@ -1,0 +1,7 @@
+- Rollladensteuerung
+- Auto
+  - mit Sensor
+  - mit Fernsteuerung über Webinterface
+  - mit Tracking zum Hinterherfahren
+- Blumen gießen
+- Sensoren für Temperatur, Luftfeuchtigkeit, Licht, Luftdruck, Luftqualität
