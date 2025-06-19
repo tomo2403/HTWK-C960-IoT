@@ -5,3 +5,24 @@
   - mit Tracking zum Hinterherfahren
 - Blumen gießen
 - Sensoren für Temperatur, Luftfeuchtigkeit, Licht, Luftdruck, Luftqualität
+
+
+# Auto
+Mobile Messstation mit folgenden Funktionen:
+
+- Fahren
+  - Vorwärts
+  - Rückwärts
+  - Links
+  - Rechts
+- LEDs
+  - Blinker
+  - Scheinwerfer
+- Steuerung
+  - über Webinterface
+- Sensoren
+  - Temperatur
+  - Luftfeuchtigkeit
+  - Luftdruck
+  - Luftqualität
+
