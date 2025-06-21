@@ -1,0 +1,16 @@
+services:
+  nanomq:
+    image: emqx/nanomq:latest
+    container_name: nanomq
+    ports:
+      - "1883:1883"   # MQTT unverschlüsselt
+      - "8083:8083"   # MQTT über WebSocket
+      - "8883:8883"   # MQTT über TLS
+    restart: unless-stopped
+
+  mqttx-web:
+    image: emqx/mqttx-web:latest
+    container_name: mqttx-web
+    ports:
+      - "80:80"  # Web UI Port
+    restart: unless-stopped
