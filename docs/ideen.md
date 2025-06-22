@@ -26,3 +26,12 @@ Mobile Messstation mit folgenden Funktionen:
   - Luftdruck
   - Luftqualität
 
+## Steuerung
+- ESP-NOW
+  - Ein ESP am Auto, einer auf dem Breadboard mit Joystick
+
+## Sensordaten
+- MQTT Broker
+- Telegraf
+- InfluxDB
+- Grafana
