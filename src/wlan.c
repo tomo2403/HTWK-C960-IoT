@@ -1,89 +1,85 @@
+#include "../include/wlan.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
-#include "nvs_flash.h"
 #include "esp_netif.h"
-#include "esp_wpa2.h"
+#include "esp_eap_client.h"
 #include <string.h>
 
+#include "../include/secrets.h"
 
-#define EXAMPLE_WIFI_SSID      "eduroam"
-#define EXAMPLE_USERNAME       "tmohr@htwk-leipzig.de"
-#define EXAMPLE_PASSWORD       "juSdyw-menbiq-5ribge"
-#define EXAMPLE_CA_CERT        "-----BEGIN CERTIFICATE-----\n" \
-"MIIDwzCCAqugAwIBAgIBATANBgkqhkiG9w0BAQsFADCBgjELMAkGA1UEBhMCREUx\n" \
-"KzApBgNVBAoMIlQtU3lzdGVtcyBFbnRlcnByaXNlIFNlcnZpY2VzIEdtYkgxHzAd\n" \
-"BgNVBAsMFlQtU3lzdGVtcyBUcnVzdCBDZW50ZXIxJTAjBgNVBAMMHFQtVGVsZVNl\n" \
-"YyBHbG9iYWxSb290IENsYXNzIDIwHhcNMDgxMDAxMTA0MDE0WhcNMzMxMDAxMjM1\n" \
-"OTU5WjCBgjELMAkGA1UEBhMCREUxKzApBgNVBAoMIlQtU3lzdGVtcyBFbnRlcnBy\n" \
-"aXNlIFNlcnZpY2VzIEdtYkgxHzAdBgNVBAsMFlQtU3lzdGVtcyBUcnVzdCBDZW50\n" \
-"ZXIxJTAjBgNVBAMMHFQtVGVsZVNlYyBHbG9iYWxSb290IENsYXNzIDIwggEiMA0G\n" \
-"CSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCqX9obX+hzkeXaXPSi5kfl82hVYAUd\n" \
-"AqSzm1nzHoqvNK38DcLZSBnuaY/JIPwhqgcZ7bBcrGXHX+0CfHt8LRvWurmAwhiC\n" \
-"FoT6ZrAIxlQjgeTNuUk/9k9uN0goOA/FvudocP05l03Sx5iRUKrERLMjfTlH6VJi\n" \
-"1hKTXrcxlkIF+3anHqP1wvzpesVsqXFP6st4vGCvx9702cu+fjOlbpSD8DT6Iavq\n" \
-"jnKgP6TeMFvvhk1qlVtDRKgQFRzlAVfFmPHmBiiRqiDFt1MmUUOyCxGVWOHAD3bZ\n" \
-"wI18gfNycJ5v/hqO2V81xrJvNHy+SE/iWjnX2J14np+GPgNeGYtEotXHAgMBAAGj\n" \
-"QjBAMA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgEGMB0GA1UdDgQWBBS/\n" \
-"WSA2AHmgoCJrjNXyYdK4LMuCSjANBgkqhkiG9w0BAQsFAAOCAQEAMQOiYQsfdOhy\n" \
-"NsZt+U2e+iKo4YFWz827n+qrkRk4r6p8FU3ztqONpfSO9kSpp+ghla0+AGIWiPAC\n" \
-"uvxhI+YzmzB6azZie60EI4RYZeLbK4rnJVM3YlNfvNoBYimipidx5joifsFvHZVw\n" \
-"IEoHNN/q/xWA5brXethbdXwFeilHfkCoMRN3zUA7tFFHei4R40cR3p1m0IvVVGb6\n" \
-"g1XqfMIpiRvpb7PO4gWEyS8+eIVibslfwXhjdFjASBgMmTnrpMwatXlajRWc2BQN\n" \
-"9noHV8cigwUtPJslJj0Ys6lDfMjIq2SPDqO/nBudMNva0Bkuqjzx+zOAduTNrRlP\n" \
-"BSeOE6Fuwg==\n" \
-"-----END CERTIFICATE-----"
+#define USE_WPA2_ENTERPRISE 0
 
-static const char *TAG = "wifi_wpa2_enterprise";
+EventGroupHandle_t wifi_event_group = NULL;
+const int WIFI_CONNECTED_BIT = BIT0;
 
-void wifi_init_wpa2_enterprise(void)
+
+void eventHandler(void* arg, const esp_event_base_t event_base, const int32_t event_id, void* event_data)
 {
-	esp_netif_init();
-	esp_event_loop_create_default();
-	esp_netif_create_default_wifi_sta();
-
-	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-	esp_wifi_init(&cfg);
-
-	wifi_config_t wifi_config = {
-		.sta = {
-			.ssid = EXAMPLE_WIFI_SSID,
-		},
-	};
-	esp_wifi_set_mode(WIFI_MODE_STA);
-	esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
-
-	esp_wifi_sta_enterprise_enable();
-	esp_eap_client_set_identity((uint8_t *)EXAMPLE_USERNAME, strlen(EXAMPLE_USERNAME));
-	esp_eap_client_set_username((uint8_t *)EXAMPLE_USERNAME, strlen(EXAMPLE_USERNAME));
-	esp_eap_client_set_password((uint8_t *)EXAMPLE_PASSWORD, strlen(EXAMPLE_PASSWORD));
-	esp_eap_client_set_ca_cert((uint8_t * )EXAMPLE_CA_CERT, strlen(EXAMPLE_CA_CERT));
-
-	esp_wifi_start();
-	esp_wifi_connect();
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        ESP_LOGW("WifiManager", "Verbindung verloren, versuche erneut...");
+        esp_wifi_connect();
+        xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        const ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI("WifiManager", "Verbunden, IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
+    }
 }
 
-static void event_handler(void* arg, esp_event_base_t event_base,
-						  int32_t event_id, void* event_data) {
-	if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-		esp_wifi_connect();
-	} else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-		ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-		ESP_LOGI(TAG, "Verbunden, IP: " IPSTR, IP2STR(&event->ip_info.ip));
-	} else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-		ESP_LOGI(TAG, "Verbindung verloren, versuche erneut...");
-		esp_wifi_connect();
-	}
+void initStaEventHandlers()
+{
+    esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &eventHandler, NULL, NULL);
+    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &eventHandler, NULL, NULL);
 }
 
-
-void app_main(void)
+void initWPA2Enterprise()
 {
-	vTaskDelay(2000 / portTICK_PERIOD_MS); // Wartezeit für NVS-Initialisierung
-	nvs_flash_init();
-	esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, NULL);
-	esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL, NULL);
-	wifi_init_wpa2_enterprise();
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = CONFIG_WPA2E_SSID,
+        },
+    };
+    memcpy(wifi_config.sta.ssid, CONFIG_WPA2E_SSID, sizeof(CONFIG_WPA2E_SSID));
+    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_eap_client_set_identity((uint8_t *)CONFIG_WPA2E_IDENTITY, strlen(CONFIG_WPA2E_IDENTITY)));
+    ESP_ERROR_CHECK(esp_eap_client_set_username((uint8_t *)CONFIG_WPA2E_USERNAME, strlen(CONFIG_WPA2E_USERNAME)));
+    ESP_ERROR_CHECK(esp_eap_client_set_password((uint8_t *)CONFIG_WPA2E_PASSWORD, strlen(CONFIG_WPA2E_PASSWORD)));
+    ESP_ERROR_CHECK(esp_wifi_sta_enterprise_enable());
+}
+
+void initWPA2Personal()
+{
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = CONFIG_WPA2_SSID,
+            .password = CONFIG_WPA2_PASSWORD,
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+        },
+    };
+    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
+}
+
+void initSTA()
+{
+    wifi_event_group = xEventGroupCreate();
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_create_default_wifi_sta();
+    const wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+
+#if USE_WPA2_ENTERPRISE
+    initWPA2Enterprise();
+#else
+    initWPA2Personal();
+#endif
+
+    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_ERROR_CHECK(esp_wifi_connect());
 }
