@@ -9,3 +9,5 @@
 
 #define CONFIG_WPA2_SSID ""
 #define CONFIG_WPA2_PASSWORD ""
+
+#define MQTT_BROKER_URI "mqtt://localhost"

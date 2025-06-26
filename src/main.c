@@ -4,7 +4,10 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include <string.h>
-#include "../include/wlan.h"
+
+#include "mqtt.h"
+#include "wlan.h"
+
 
 static const char *TAG = "wifi_sta";
 
@@ -17,4 +20,5 @@ void app_main(void)
 	initSTA();
 
 	// TODO: MQTT
+	mqtt_app_start();
 }
