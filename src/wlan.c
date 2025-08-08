@@ -15,16 +15,21 @@ EventGroupHandle_t wifi_event_group = NULL;
 const int WIFI_CONNECTED_BIT = BIT0;
 
 
-void eventHandler(void* arg, const esp_event_base_t event_base, const int32_t event_id, void* event_data)
+void eventHandler(void *arg, const esp_event_base_t event_base, const int32_t event_id, void *event_data)
 {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
+    {
         esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+    }
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
+    {
         ESP_LOGW("WifiManager", "Verbindung verloren, versuche erneut...");
         esp_wifi_connect();
         xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        const ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+    }
+    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
+    {
+        const ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
         ESP_LOGI("WifiManager", "Verbunden, IP: " IPSTR, IP2STR(&event->ip_info.ip));
         xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
     }
@@ -82,4 +87,14 @@ void initSTA()
 
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_connect());
+}
+
+bool waitForSTAConnected(const TickType_t timeout)
+{
+    if (wifi_event_group == NULL)
+    {
+        return false;
+    }
+    const EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, timeout);
+    return (bits & WIFI_CONNECTED_BIT) != 0;
 }

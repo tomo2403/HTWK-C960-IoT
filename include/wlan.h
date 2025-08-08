@@ -13,4 +13,6 @@ void initWPA2Personal();
 
 void initSTA();
 
+bool waitForSTAConnected(TickType_t timeout);
+
 #endif //WLAN_H

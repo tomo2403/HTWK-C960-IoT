@@ -20,12 +20,17 @@ void app_main(void)
 	initSTA();
 
 	// TODO: MQTT
-	mqtt_app_start();
+	while (!waitForSTAConnected(pdMS_TO_TICKS(10000)))
+	{
+		ESP_LOGE(TAG, "WLAN-Verbindung noch nicht hergestellt, MQTT wird nicht gestartet.");
+	}
+    mqtt_app_start();
 
 	// TODO: SENSORS
-	sensor_init();
+	//sensor_init();
 
-	const uint16_t tvoc = sgp30->TVOC; // Assuming sgp30 is a struct instance
-	char tvoc_str[10];
-	snprintf(tvoc_str, sizeof(tvoc_str), "%u", tvoc);
-	mqtt_enqueue("/sensor/tvoc", tvoc_str, 0, 1, 0);}
+	//const uint16_t tvoc = sgp30->TVOC; // Assuming sgp30 is a struct instance
+	//char tvoc_str[10];
+	//snprintf(tvoc_str, sizeof(tvoc_str), "%u", tvoc);
+	//mqtt_enqueue("/sensor/tvoc", tvoc_str, 0, 1, 0);
+}
