@@ -4,8 +4,10 @@
 #include "esp_log.h"
 #include "secrets.h"
 
+esp_mqtt_client_handle_t client;
+
 esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event) {
-	esp_mqtt_client_handle_t client = event->client;
+	client = event->client;
 	if (event->event_id == MQTT_EVENT_CONNECTED) {
 		ESP_LOGI("MQTT Manager", "Verbunden mit MQTT-Broker");
 		esp_mqtt_client_publish(client, "/sensor/temp", "22.5", 0, 1, 0);
@@ -23,7 +25,12 @@ void mqtt_app_start(void) {
 		.broker.address.uri = MQTT_BROKER_URI,
 	};
 
-	esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
+	client = esp_mqtt_client_init(&mqtt_cfg);
 	esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client);
 	esp_mqtt_client_start(client);
+}
+
+void mqtt_enqueue(const char *topic, const char *data, int len, int qos, int retain)
+{
+	esp_mqtt_client_enqueue(client, topic, data, len, qos, retain, true);
 }
