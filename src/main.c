@@ -7,7 +7,7 @@
 
 #include "mqtt.h"
 #include "wlan.h"
-
+#include "sensors.h"
 
 static const char *TAG = "wifi_sta";
 
@@ -21,4 +21,11 @@ void app_main(void)
 
 	// TODO: MQTT
 	mqtt_app_start();
-}
+
+	// TODO: SENSORS
+	sensor_init();
+
+	const uint16_t tvoc = sgp30->TVOC; // Assuming sgp30 is a struct instance
+	char tvoc_str[10];
+	snprintf(tvoc_str, sizeof(tvoc_str), "%u", tvoc);
+	mqtt_enqueue("/sensor/tvoc", tvoc_str, 0, 1, 0);}
