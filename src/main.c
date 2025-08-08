@@ -16,21 +16,26 @@ void app_main(void)
 	vTaskDelay(1000 / portTICK_PERIOD_MS); // Wartezeit für NVS-Initialisierung
 	nvs_flash_init();
 
+	ESP_LOGI(TAG, "Konfiguriere WiFi");
 	initStaEventHandlers();
 	initSTA();
 
 	// TODO: MQTT
-	while (!waitForSTAConnected(pdMS_TO_TICKS(10000)))
-	{
-		ESP_LOGE(TAG, "WLAN-Verbindung noch nicht hergestellt, MQTT wird nicht gestartet.");
-	}
+	ESP_LOGI(TAG, "Warte auf WiFi Verbindung");
+	waitForSTAConnected(portMAX_DELAY);
+	ESP_LOGI(TAG, "Starte MQTT");
     mqtt_app_start();
 
 	// TODO: SENSORS
-	//sensor_init();
+	ESP_LOGI(TAG, "Starte Sensoren");
+	sensor_init();
 
-	//const uint16_t tvoc = sgp30->TVOC; // Assuming sgp30 is a struct instance
-	//char tvoc_str[10];
-	//snprintf(tvoc_str, sizeof(tvoc_str), "%u", tvoc);
-	//mqtt_enqueue("/sensor/tvoc", tvoc_str, 0, 1, 0);
+	const uint16_t tvoc = sgp30->TVOC; // Assuming sgp30 is a struct instance
+	char tvoc_str[10];
+	snprintf(tvoc_str, sizeof(tvoc_str), "%u", tvoc);
+
+	ESP_LOGI(TAG, "Warte auf MQTT Verbindung");
+	mqtt_wait_connected(portMAX_DELAY);
+	ESP_LOGI(TAG, "Sende Daten");
+	mqtt_enqueue("/sensor/tvoc", tvoc_str, 0, 1, 0);
 }

@@ -12,6 +12,10 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
 
 void mqtt_app_start();
 
+bool mqtt_is_connected(void);
+
+bool mqtt_wait_connected(TickType_t timeout);
+
 void mqtt_enqueue(const char *topic, const char *data, int len, int qos, int retain);
 
 #endif //MQTT_H

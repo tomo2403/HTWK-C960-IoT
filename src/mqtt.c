@@ -5,6 +5,10 @@
 #include "secrets.h"
 
 esp_mqtt_client_handle_t client;
+static EventGroupHandle_t s_mqtt_event_group;
+
+#define MQTT_CONNECTED_BIT BIT0
+
 
 esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event) {
 	client = event->client;
@@ -14,6 +18,19 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event) {
 		esp_mqtt_client_publish(client, "/sensor/humidity", "60", 0, 1, 0);
 	}
 	return ESP_OK;
+}
+
+bool mqtt_is_connected(void) {
+	if (!s_mqtt_event_group) return false;
+	const EventBits_t bits = xEventGroupGetBits(s_mqtt_event_group);
+	return (bits & MQTT_CONNECTED_BIT) != 0;
+}
+
+bool mqtt_wait_connected(TickType_t timeout) {
+	if (!s_mqtt_event_group) return false;
+	const EventBits_t bits = xEventGroupWaitBits(
+		s_mqtt_event_group, MQTT_CONNECTED_BIT, pdFALSE, pdTRUE, timeout);
+	return (bits & MQTT_CONNECTED_BIT) != 0;
 }
 
 void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
