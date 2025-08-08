@@ -1,5 +1,6 @@
-#include "../include/wlan.h"
+#include "wlan.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
@@ -7,15 +8,16 @@
 #include "esp_eap_client.h"
 #include <string.h>
 
-#include "../include/secrets.h"
+#include "secrets.h"
 
 #define USE_WPA2_ENTERPRISE 0
 
-EventGroupHandle_t wifi_event_group = NULL;
-const int WIFI_CONNECTED_BIT = BIT0;
+static const char *TAG_WIFI = "WifiManager";
 
+static EventGroupHandle_t wifi_event_group = NULL;
+static const int WIFI_CONNECTED_BIT = BIT0;
 
-void eventHandler(void *arg, const esp_event_base_t event_base, const int32_t event_id, void *event_data)
+void eventHandler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
@@ -23,15 +25,15 @@ void eventHandler(void *arg, const esp_event_base_t event_base, const int32_t ev
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
-        ESP_LOGW("WifiManager", "Verbindung verloren, versuche erneut...");
+        ESP_LOGW(TAG_WIFI, "Verbindung verloren, versuche erneut...");
         esp_wifi_connect();
-        xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
+        if (wifi_event_group) xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
     {
         const ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
-        ESP_LOGI("WifiManager", "Verbunden, IP: " IPSTR, IP2STR(&event->ip_info.ip));
-        xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
+        ESP_LOGI(TAG_WIFI, "Verbunden, IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        if (wifi_event_group) xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
 
@@ -68,12 +70,14 @@ void initWPA2Personal()
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
 }
 
-void initSTA()
+void initSTA(void)
 {
     wifi_event_group = xEventGroupCreate();
+
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
+
     const wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
@@ -89,12 +93,9 @@ void initSTA()
     ESP_ERROR_CHECK(esp_wifi_connect());
 }
 
-bool waitForSTAConnected(const TickType_t timeout)
+bool waitForSTAConnected(TickType_t timeout)
 {
-    if (wifi_event_group == NULL)
-    {
-        return false;
-    }
-    const EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, timeout);
+    if (!wifi_event_group) return false;
+    EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, timeout);
     return (bits & WIFI_CONNECTED_BIT) != 0;
 }
