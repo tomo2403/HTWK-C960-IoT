@@ -2257,6 +2257,20 @@ CONFIG_BMX280_DEFAULT_HUMIDITY_OVERSAMPLING_X1=y
 # end of BME280 Specific Options
 # end of Default Configuration
 # end of BMX280 Options
+
+#
+# SGP30 I2C Peripheral Configuration
+#
+
+#
+# I2C Master
+#
+CONFIG_I2C_MASTER_SCL=7
+CONFIG_I2C_MASTER_SDA=6
+CONFIG_I2C_MASTER_PORT_NUM=0
+CONFIG_I2C_MASTER_FREQUENCY=100000
+# end of I2C Master
+# end of SGP30 I2C Peripheral Configuration
 # end of Component config
 
 # CONFIG_IDF_EXPERIMENTAL_FEATURES is not set
