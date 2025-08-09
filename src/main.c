@@ -5,12 +5,46 @@
 #include "nvs_flash.h"
 #include <string.h>
 #include <stdio.h>
+#include "esp_sntp.h"
 
 #include "mqtt.h"
 #include "wlan.h"
 #include "sensors.h"
 
+#define TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3"
+
 static const char *TAG = "AppManager";
+
+static void time_sync_notification_cb(struct timeval *tv) {
+    ESP_LOGI(TAG, "Zeit synchronisiert");
+}
+
+void obtain_time(void) {
+    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, "pool.ntp.org");
+    sntp_set_time_sync_notification_cb(time_sync_notification_cb);
+    esp_sntp_init();
+
+    setenv("TZ", TIMEZONE, 1);
+    tzset();
+
+    time_t now;
+    struct tm timeinfo;
+    int retry = 0;
+    const int retry_count = 10;
+
+    do {
+        time(&now);
+        localtime_r(&now, &timeinfo);
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+    } while (timeinfo.tm_year < (2016 - 1900) && ++retry < retry_count);
+
+    if (retry < retry_count) {
+        ESP_LOGI(TAG, "Zeit: %s", asctime(&timeinfo));
+    } else {
+        ESP_LOGW(TAG, "NTP Synchronisierung fehlgeschlagen");
+    }
+}
 
 void postSensorData(void *args)
 {
@@ -61,6 +95,7 @@ void app_main(void)
 
     ESP_LOGI(TAG, "Warte auf WiFi Verbindung");
     waitForSTAConnected(portMAX_DELAY);
+    obtain_time();
 
     ESP_LOGI(TAG, "Starte MQTT");
     mqtt_app_start();
