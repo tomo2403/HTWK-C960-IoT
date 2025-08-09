@@ -22,8 +22,6 @@ esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event)
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "Verbunden mit MQTT-Broker");
             if (s_mqtt_event_group) xEventGroupSetBits(s_mqtt_event_group, MQTT_CONNECTED_BIT);
-            esp_mqtt_client_publish(client, "/sensor/temp", "22.5", 0, 1, 0);
-            esp_mqtt_client_publish(client, "/sensor/humidity", "60", 0, 1, 0);
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGW(TAG, "MQTT getrennt");

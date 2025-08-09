@@ -1,25 +1,26 @@
 #include "sensors.h"
 
-i2c_port_t i2c_num = I2C_MASTER_NUM;
+i2c_port_t i2c_num = CONFIG_I2C_MASTER_PORT_NUM;
 sgp30_dev_t main_sgp30_sensor;
+bmx280_t* bmx280;
 
 static const char *TAG = "SensorManager";
 
 esp_err_t i2c_master_driver_initialize(void)
 {
-    int i2c_master_port = I2C_MASTER_NUM;
+    const int i2c_master_port = i2c_num;
     i2c_config_t conf;
 
     conf.mode = I2C_MODE_MASTER;
-    conf.sda_io_num = I2C_MASTER_SDA_IO;
+    conf.sda_io_num = CONFIG_I2C_MASTER_SDA;
     conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.scl_io_num = I2C_MASTER_SCL_IO;
+    conf.scl_io_num = CONFIG_I2C_MASTER_SCL;
     conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.master.clk_speed = I2C_MASTER_FREQ_HZ;
+    conf.master.clk_speed = CONFIG_I2C_MASTER_FREQUENCY;
     conf.clk_flags = 0;
 
     i2c_param_config(i2c_master_port, &conf);
-    return i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
+    return i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
 }
 
 int8_t main_i2c_read(const uint8_t reg_addr, uint8_t *reg_data, const uint32_t len, void *intf_ptr)
@@ -89,11 +90,10 @@ int8_t main_i2c_write(const uint8_t reg_addr, const uint8_t *reg_data, const uin
 void sensor_sgp30_init()
 {
     ESP_LOGI(TAG, "SGP30 main task initializing...");
-    i2c_master_driver_initialize();
     sgp30_init(&main_sgp30_sensor, main_i2c_read, main_i2c_write);
 
     ESP_LOGI(TAG, "SGP30 Calibrating...");
-    for (int i = 0; i < 30; i++)
+    for (int i = 0; i < 20; i++)
     {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
         sgp30_IAQ_measure(&main_sgp30_sensor);
@@ -104,4 +104,21 @@ void sensor_sgp30_init()
     uint16_t eco2_baseline, tvoc_baseline;
     sgp30_get_IAQ_baseline(&main_sgp30_sensor, &eco2_baseline, &tvoc_baseline);
     ESP_LOGI(TAG, "BASELINES - TVOC: %d,  eCO2: %d", tvoc_baseline, eco2_baseline);
+}
+
+void sensor_bmx280_init()
+{
+    ESP_LOGI(TAG, "BMX280 main task initializing...");
+    bmx280 = bmx280_create(I2C_NUM_0);
+
+    if (!bmx280) {
+        ESP_LOGE("test", "Could not create bmx280 driver.");
+        return;
+    }
+
+    ESP_ERROR_CHECK(bmx280_init(bmx280));
+
+    bmx280_config_t bmx_cfg = BMX280_DEFAULT_CONFIG;
+    ESP_ERROR_CHECK(bmx280_configure(bmx280, &bmx_cfg));
+    ESP_ERROR_CHECK(bmx280_setMode(bmx280, BMX280_MODE_CYCLE));
 }

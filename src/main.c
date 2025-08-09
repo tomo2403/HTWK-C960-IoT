@@ -14,17 +14,34 @@ static const char *TAG = "AppManager";
 
 void postSensorData(void *args)
 {
+    float temp = 0, pres = 0, hum = 0;
+    char tvoc_buf[16], eco2_buf[16], temp_buf[16], pres_buf[16], hum_buf[16];
     while (1)
     {
         vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+        // SGP30
         sgp30_IAQ_measure(&main_sgp30_sensor);
-        ESP_LOGI(TAG, "TVOC: %d,  eCO2: %d", main_sgp30_sensor.TVOC, main_sgp30_sensor.eCO2);
-        char tvoc_buf[12];
-        char eco2_buf[12];
+
+        // BME280
+        do {
+            vTaskDelay(pdMS_TO_TICKS(1));
+        } while(bmx280_isSampling(bmx280));
+        ESP_ERROR_CHECK(bmx280_readoutFloat(bmx280, &temp, &pres, &hum));
+
         const int tvoc_len = snprintf(tvoc_buf, sizeof(tvoc_buf), "%u", (unsigned)main_sgp30_sensor.TVOC);
         const int eco2_len = snprintf(eco2_buf, sizeof(eco2_buf), "%u", (unsigned)main_sgp30_sensor.eCO2);
+        const int temp_len = snprintf(temp_buf, sizeof(temp_buf), "%.2f", temp);
+        const int pres_len = snprintf(pres_buf, sizeof(pres_buf), "%.2f", pres);
+        const int hum_len = snprintf(hum_buf, sizeof(hum_buf), "%.2f", hum);
+
         mqtt_enqueue("/sensor/tvoc", tvoc_buf, tvoc_len, 1, 0);
         mqtt_enqueue("/sensor/eco2", eco2_buf, eco2_len, 1, 0);
+        mqtt_enqueue("/sensor/temperature", temp_buf, temp_len, 1, 0);
+        mqtt_enqueue("/sensor/pressure", pres_buf, pres_len, 1, 0);
+        mqtt_enqueue("/sensor/humidity", hum_buf, hum_len, 1, 0);
+
+        ESP_LOGI(TAG, "TVOC: %s,  eCO2: %s, Temp: %s, Pres: %s, Hum: %s", tvoc_buf, eco2_buf, temp_buf, pres_buf, hum_buf);
     }
 }
 
@@ -43,19 +60,21 @@ void app_main(void)
     initSTA();
 
     ESP_LOGI(TAG, "Warte auf WiFi Verbindung");
-    if (!waitForSTAConnected(portMAX_DELAY))
-    {
-        ESP_LOGE(TAG, "Konnte keine WiFi-Verbindung herstellen");
-        return;
-    }
+    waitForSTAConnected(portMAX_DELAY);
 
     ESP_LOGI(TAG, "Starte MQTT");
     mqtt_app_start();
 
-    esp_log_level_set("SGP30-LIB", ESP_LOG_VERBOSE); // DEBUG
+    ESP_LOGI(TAG, "Konfiguriere I2C");
+    i2c_master_driver_initialize();
+
+    ESP_LOGI(TAG, "Starte Sensoren");
+    sensor_bmx280_init();
     sensor_sgp30_init();
 
     ESP_LOGI(TAG, "Warte auf MQTT Verbindung");
     mqtt_wait_connected(portMAX_DELAY);
+
+    ESP_LOGI(TAG, "Starte Sensor Task");
     xTaskCreate(postSensorData, "sensor_task", 1024 * 2, (void *)0, 10, NULL);
 }
