@@ -142,6 +142,47 @@ static void espnow_discovery_task(void* arg)
     }
 }
 
+// Kleines Test-Payload-Format
+typedef struct __attribute__((packed)) {
+    uint32_t counter;
+    char     message[32]; // kurze Testnachricht
+} test_payload_t;
+
+// Sende-Task: schickt alle 3s ein Testpaket an alle bekannten Peers und einmal Broadcast
+static void espnow_test_sender_task(void* arg)
+{
+    (void)arg;
+    uint32_t counter = 0;
+
+    static const uint8_t BCAST[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+
+    while (1)
+    {
+        test_payload_t p = {0};
+        p.counter = counter++;
+        snprintf(p.message, sizeof(p.message), "hello-%lu", (unsigned long)p.counter);
+
+        // 1) Broadcast (optional, zu Demo-Zwecken)
+        espnow_send(BCAST, &p, sizeof(p));
+
+        // 2) Unicast an alle bekannten Peers
+        for (int i = 0; i < ESPNOW_MAX_PEERS; ++i) {
+            if (s_known_peers[i].used) {
+                esp_err_t err = espnow_send(s_known_peers[i].mac, &p, sizeof(p));
+                if (err != ESP_OK) {
+                    ESP_LOGW("ESPNOW", "Send an %02X:%02X:%02X:%02X:%02X:%02X fehlgeschlagen: %s",
+                             s_known_peers[i].mac[0], s_known_peers[i].mac[1], s_known_peers[i].mac[2],
+                             s_known_peers[i].mac[3], s_known_peers[i].mac[4], s_known_peers[i].mac[5],
+                             esp_err_to_name(err));
+                }
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(3000));
+    }
+}
+
+
 [[noreturn]]
 void postSensorData(void *args)
 {
@@ -215,6 +256,7 @@ void app_main(void)
 
     // Discovery-Task starten
     xTaskCreate(espnow_discovery_task, "espnow_disc", 2048, NULL, 8, NULL);
+    xTaskCreate(espnow_test_sender_task, "espnow_test", 2048, NULL, 8, NULL);
 
     // ESP_LOGI(TAG, "Starte MQTT");
     // mqtt_app_start();
