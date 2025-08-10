@@ -10,9 +10,137 @@
 #include "wlan.h"
 #include "sensors.h"
 #include "ntp.h"
+#include "espnow.h"
 
 static const char *TAG = "AppManager";
 
+// Gemeinsames Discovery-Token (an beiden Geräten identisch setzen!)
+static const char DISCOVERY_TOKEN[] = "C960-ESPNOW-TOKEN";
+
+// ESPNOW Broadcast-MAC
+static const uint8_t ESPNOW_BCAST_MAC[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+
+// Discovery-Frame-Typen
+typedef enum : uint8_t {
+    DISC_HELLO = 1,
+    DISC_ACK   = 2
+} disc_type_t;
+
+typedef struct __attribute__((packed)) {
+    uint8_t  type;  // DISC_HELLO oder DISC_ACK
+    uint8_t  ver;   // Protokollversion
+    uint16_t flags; // reserviert
+    // Danach: Token als ASCII (ohne Nullterminator), direkt angehängt
+    // Layout: [header][token bytes]
+} disc_hdr_t;
+
+#define DISC_PROTO_VER 1
+
+// Lokale Peer-Verwaltung (klein & simpel)
+typedef struct {
+    uint8_t mac[6];
+    bool used;
+} peer_entry_t;
+
+static peer_entry_t s_known_peers[ESPNOW_MAX_PEERS] = {0};
+
+// Hilfsfunktionen für Peerliste
+static bool mac_equal6(const uint8_t a[6], const uint8_t b[6]) {
+    return memcmp(a, b, 6) == 0;
+}
+static bool peer_known(const uint8_t mac[6]) {
+    for (int i = 0; i < ESPNOW_MAX_PEERS; ++i) {
+        if (s_known_peers[i].used && mac_equal6(s_known_peers[i].mac, mac)) return true;
+    }
+    return false;
+}
+static bool peer_add_local(const uint8_t mac[6]) {
+    if (peer_known(mac)) return true;
+    for (int i = 0; i < ESPNOW_MAX_PEERS; ++i) {
+        if (!s_known_peers[i].used) {
+            memcpy(s_known_peers[i].mac, mac, 6);
+            s_known_peers[i].used = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+// ESPNOW-Empfangs-Callback: vollständige Nutzdaten
+static void on_espnow_recv(const uint8_t mac[6], const uint8_t* data, size_t len, void* user_ctx)
+{
+    (void)user_ctx;
+
+    if (len >= sizeof(disc_hdr_t)) {
+        const disc_hdr_t* hdr = (const disc_hdr_t*)data;
+        const char* token_rx = (const char*)(data + sizeof(disc_hdr_t));
+        size_t token_len = len - sizeof(disc_hdr_t);
+
+        // Discovery-HELLO behandeln
+        if (hdr->type == DISC_HELLO && hdr->ver == DISC_PROTO_VER) {
+            if (token_len == strlen(DISCOVERY_TOKEN) &&
+                memcmp(token_rx, DISCOVERY_TOKEN, token_len) == 0) {
+
+                // Peer ggf. hinzufügen
+                if (!peer_known(mac)) {
+                    ESP_LOGI("ESPNOW", "Discovery: neuer Peer %02X:%02X:%02X:%02X:%02X:%02X",
+                             mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+                    if (espnow_add_peer(mac, NULL, false) == ESP_OK && peer_add_local(mac)) {
+                        ESP_LOGI("ESPNOW", "Peer hinzugefügt");
+                    } else {
+                        ESP_LOGW("ESPNOW", "Peer konnte nicht hinzugefügt werden (Liste voll?)");
+                    }
+                }
+
+                // Unicast ACK zurücksenden
+                uint8_t ack_buf[sizeof(disc_hdr_t) + sizeof(DISCOVERY_TOKEN) - 1];
+                disc_hdr_t ack = {.type = DISC_ACK, .ver = DISC_PROTO_VER, .flags = 0};
+                memcpy(ack_buf, &ack, sizeof(ack));
+                memcpy(ack_buf + sizeof(ack), DISCOVERY_TOKEN, sizeof(DISCOVERY_TOKEN) - 1);
+                espnow_send(mac, ack_buf, sizeof(ack_buf));
+                return;
+            }
+        }
+
+        // Discovery-ACK behandeln (nur Log/Bestätigung)
+        if (hdr->type == DISC_ACK && hdr->ver == DISC_PROTO_VER) {
+            if (token_len == strlen(DISCOVERY_TOKEN) &&
+                memcmp(token_rx, DISCOVERY_TOKEN, token_len) == 0) {
+                // Gegenstelle bestätigt – sicherstellen, dass sie als Peer erfasst ist
+                if (!peer_known(mac)) {
+                    if (espnow_add_peer(mac, NULL, false) == ESP_OK && peer_add_local(mac)) {
+                        ESP_LOGI("ESPNOW", "Peer via ACK hinzugefügt: %02X:%02X:%02X:%02X:%02X:%02X",
+                                 mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+                    }
+                }
+                ESP_LOGI("ESPNOW", "Discovery ACK von %02X:%02X:%02X:%02X:%02X:%02X",
+                         mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+                return;
+            }
+        }
+    }
+
+    // Normale Nutzdaten
+    ESP_LOGI("ESPNOW", "Empfangen: %u Bytes von %02X:%02X:%02X:%02X:%02X:%02X",
+             (unsigned)len, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+// Periodisches Discovery-Beaconing (Broadcast HELLO)
+static void espnow_discovery_task(void* arg)
+{
+    (void)arg;
+    // HELLO-Payload vorbereiten
+    uint8_t hello_buf[sizeof(disc_hdr_t) + sizeof(DISCOVERY_TOKEN) - 1];
+    disc_hdr_t hello = {.type = DISC_HELLO, .ver = DISC_PROTO_VER, .flags = 0};
+    memcpy(hello_buf, &hello, sizeof(hello));
+    memcpy(hello_buf + sizeof(hello), DISCOVERY_TOKEN, sizeof(DISCOVERY_TOKEN) - 1);
+
+    for (;;) {
+        // Broadcast-HELLO senden
+        espnow_send(ESPNOW_BCAST_MAC, hello_buf, sizeof(hello_buf));
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
 
 [[noreturn]]
 void postSensorData(void *args)
@@ -68,19 +196,39 @@ void app_main(void)
     waitForSTAConnected(portMAX_DELAY);
     ntp_obtain_time();
 
-    ESP_LOGI(TAG, "Starte MQTT");
-    mqtt_app_start();
+    // ESPNOW initialisieren
+    ESP_LOGI(TAG, "Initialisiere ESPNOW");
+    ESP_ERROR_CHECK(espnow_init(WIFI_IF_STA, on_espnow_recv, NULL));
 
-    ESP_LOGI(TAG, "Konfiguriere I2C");
-    i2c_master_driver_initialize();
+    // Optional: PMK setzen, falls Verschlüsselung gewünscht:
+    // const uint8_t pmk[ESPNOW_KEY_LEN] = { /* 16 Bytes gemeinsamer Schlüssel */ };
+    // ESP_ERROR_CHECK(espnow_set_pmk(pmk));
 
-    ESP_LOGI(TAG, "Starte Sensoren");
-    sensor_bmx280_init();
-    sensor_sgp30_init();
+    // Broadcast-Peer registrieren (robust für Broadcast-Send)
+    ESP_ERROR_CHECK(espnow_add_peer(ESPNOW_BCAST_MAC, NULL, false));
 
-    ESP_LOGI(TAG, "Warte auf MQTT Verbindung");
-    mqtt_wait_connected(portMAX_DELAY);
+    // Eigene MAC loggen
+    uint8_t our_mac[6] = {0};
+    ESP_ERROR_CHECK(espnow_get_our_mac(our_mac));
+    ESP_LOGI("ESPNOW", "Unsere MAC (STA): %02X:%02X:%02X:%02X:%02X:%02X",
+             our_mac[0], our_mac[1], our_mac[2], our_mac[3], our_mac[4], our_mac[5]);
 
-    ESP_LOGI(TAG, "Starte Sensor Task");
-    xTaskCreate(postSensorData, "sensor_task", 1024 * 2, 0, 10, NULL);
+    // Discovery-Task starten
+    xTaskCreate(espnow_discovery_task, "espnow_disc", 2048, NULL, 8, NULL);
+
+    // ESP_LOGI(TAG, "Starte MQTT");
+    // mqtt_app_start();
+    //
+    // ESP_LOGI(TAG, "Konfiguriere I2C");
+    // i2c_master_driver_initialize();
+    //
+    // ESP_LOGI(TAG, "Starte Sensoren");
+    // sensor_bmx280_init();
+    // sensor_sgp30_init();
+    //
+    // ESP_LOGI(TAG, "Warte auf MQTT Verbindung");
+    // mqtt_wait_connected(portMAX_DELAY);
+    //
+    // ESP_LOGI(TAG, "Starte Sensor Task");
+    // xTaskCreate(postSensorData, "sensor_task", 1024 * 2, 0, 10, NULL);
 }
