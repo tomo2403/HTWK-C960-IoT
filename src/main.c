@@ -32,6 +32,7 @@ void postSensorData(void *args)
             vTaskDelay(pdMS_TO_TICKS(1));
         }
         ESP_ERROR_CHECK(bmx280_readoutFloat(bmx280, &temp, &pres, &hum));
+        pres /= 100; // Convert to hPa
 
         const int tvoc_len = snprintf(tvoc_buf, sizeof(tvoc_buf), "%u", (unsigned) main_sgp30_sensor.TVOC);
         const int eco2_len = snprintf(eco2_buf, sizeof(eco2_buf), "%u", (unsigned) main_sgp30_sensor.eCO2);
