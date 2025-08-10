@@ -20,7 +20,7 @@
 
 // Maximale Anzahl bekannter Peers, die wir verwalten
 #ifndef ESPNOW_MAX_PEERS
-#define ESPNOW_MAX_PEERS 10
+#define ESPNOW_MAX_PEERS 1
 #endif
 
 // Länge eines Local Master Key (LMK) für verschlüsseltes ESPNOW
