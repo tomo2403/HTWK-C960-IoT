@@ -5,66 +5,36 @@
 #include "nvs_flash.h"
 #include <string.h>
 #include <stdio.h>
-#include "esp_sntp.h"
 
 #include "mqtt.h"
 #include "wlan.h"
 #include "sensors.h"
-
-#define TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3"
+#include "ntp.h"
 
 static const char *TAG = "AppManager";
 
-static void time_sync_notification_cb(struct timeval *tv) {
-    ESP_LOGI(TAG, "Zeit synchronisiert");
-}
 
-void obtain_time(void) {
-    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    esp_sntp_setservername(0, "pool.ntp.org");
-    sntp_set_time_sync_notification_cb(time_sync_notification_cb);
-    esp_sntp_init();
-
-    setenv("TZ", TIMEZONE, 1);
-    tzset();
-
-    time_t now;
-    struct tm timeinfo;
-    int retry = 0;
-    const int retry_count = 10;
-
-    do {
-        time(&now);
-        localtime_r(&now, &timeinfo);
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
-    } while (timeinfo.tm_year < (2016 - 1900) && ++retry < retry_count);
-
-    if (retry < retry_count) {
-        ESP_LOGI(TAG, "Zeit: %s", asctime(&timeinfo));
-    } else {
-        ESP_LOGW(TAG, "NTP Synchronisierung fehlgeschlagen");
-    }
-}
-
+[[noreturn]]
 void postSensorData(void *args)
 {
     float temp = 0, pres = 0, hum = 0;
     char tvoc_buf[16], eco2_buf[16], temp_buf[16], pres_buf[16], hum_buf[16];
     while (1)
     {
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
 
         // SGP30
         sgp30_IAQ_measure(&main_sgp30_sensor);
 
         // BME280
-        do {
+        while (bmx280_isSampling(bmx280))
+        {
             vTaskDelay(pdMS_TO_TICKS(1));
-        } while(bmx280_isSampling(bmx280));
+        }
         ESP_ERROR_CHECK(bmx280_readoutFloat(bmx280, &temp, &pres, &hum));
 
-        const int tvoc_len = snprintf(tvoc_buf, sizeof(tvoc_buf), "%u", (unsigned)main_sgp30_sensor.TVOC);
-        const int eco2_len = snprintf(eco2_buf, sizeof(eco2_buf), "%u", (unsigned)main_sgp30_sensor.eCO2);
+        const int tvoc_len = snprintf(tvoc_buf, sizeof(tvoc_buf), "%u", (unsigned) main_sgp30_sensor.TVOC);
+        const int eco2_len = snprintf(eco2_buf, sizeof(eco2_buf), "%u", (unsigned) main_sgp30_sensor.eCO2);
         const int temp_len = snprintf(temp_buf, sizeof(temp_buf), "%.2f", temp);
         const int pres_len = snprintf(pres_buf, sizeof(pres_buf), "%.2f", pres);
         const int hum_len = snprintf(hum_buf, sizeof(hum_buf), "%.2f", hum);
@@ -75,7 +45,7 @@ void postSensorData(void *args)
         mqtt_enqueue("/sensor/pressure", pres_buf, pres_len, 1, 0);
         mqtt_enqueue("/sensor/humidity", hum_buf, hum_len, 1, 0);
 
-        ESP_LOGI(TAG, "TVOC: %s,  eCO2: %s, Temp: %s, Pres: %s, Hum: %s", tvoc_buf, eco2_buf, temp_buf, pres_buf, hum_buf);
+        ESP_LOGD(TAG, "TVOC: %s,  eCO2: %s, Temp: %s, Pres: %s, Hum: %s", tvoc_buf, eco2_buf, temp_buf, pres_buf, hum_buf);
     }
 }
 
@@ -95,7 +65,7 @@ void app_main(void)
 
     ESP_LOGI(TAG, "Warte auf WiFi Verbindung");
     waitForSTAConnected(portMAX_DELAY);
-    obtain_time();
+    ntp_obtain_time();
 
     ESP_LOGI(TAG, "Starte MQTT");
     mqtt_app_start();
@@ -111,5 +81,5 @@ void app_main(void)
     mqtt_wait_connected(portMAX_DELAY);
 
     ESP_LOGI(TAG, "Starte Sensor Task");
-    xTaskCreate(postSensorData, "sensor_task", 1024 * 2, (void *)0, 10, NULL);
+    xTaskCreate(postSensorData, "sensor_task", 1024 * 2, 0, 10, NULL);
 }
