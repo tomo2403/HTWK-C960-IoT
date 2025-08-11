@@ -2,7 +2,7 @@
 
 i2c_port_t i2c_num = CONFIG_I2C_MASTER_PORT_NUM;
 sgp30_dev_t main_sgp30_sensor;
-bmx280_t* bmx280;
+bmx280_t *bmx280;
 
 static const char *TAG = "SensorManager";
 
@@ -111,7 +111,8 @@ void sensor_bmx280_init()
     ESP_LOGI(TAG, "BMX280 main task initializing...");
     bmx280 = bmx280_create(I2C_NUM_0);
 
-    if (!bmx280) {
+    if (!bmx280)
+    {
         ESP_LOGE("test", "Could not create bmx280 driver.");
         return;
     }
@@ -119,6 +120,8 @@ void sensor_bmx280_init()
     ESP_ERROR_CHECK(bmx280_init(bmx280));
 
     bmx280_config_t bmx_cfg = BMX280_DEFAULT_CONFIG;
+    bmx_cfg.t_standby = BMX280_STANDBY_1000M;
+    bmx_cfg.iir_filter = BMX280_IIR_X4;
     ESP_ERROR_CHECK(bmx280_configure(bmx280, &bmx_cfg));
-    ESP_ERROR_CHECK(bmx280_setMode(bmx280, BMX280_MODE_CYCLE));
+    ESP_ERROR_CHECK(bmx280_setMode(bmx280, BMX280_MODE_SLEEP));
 }
