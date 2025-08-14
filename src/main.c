@@ -12,6 +12,8 @@
 #include "ntp.h"
 #include "espnow.h"
 
+#define DISABLE_HUMIDITY true
+
 static const char *TAG = "AppManager";
 
 // Gemeinsames Discovery-Token (an beiden Geräten identisch setzen!)
@@ -196,6 +198,7 @@ void postSensorData(void *args)
         sgp30_IAQ_measure(&main_sgp30_sensor);
 
         // BME280
+        bmx280_setMode(bmx280, BMX280_MODE_FORCE);
         while (bmx280_isSampling(bmx280))
         {
             vTaskDelay(pdMS_TO_TICKS(1));
@@ -207,13 +210,17 @@ void postSensorData(void *args)
         const int eco2_len = snprintf(eco2_buf, sizeof(eco2_buf), "%u", (unsigned) main_sgp30_sensor.eCO2);
         const int temp_len = snprintf(temp_buf, sizeof(temp_buf), "%.2f", temp);
         const int pres_len = snprintf(pres_buf, sizeof(pres_buf), "%.2f", pres);
+#if !DISABLE_HUMIDITY
         const int hum_len = snprintf(hum_buf, sizeof(hum_buf), "%.2f", hum);
+#endif
 
         mqtt_enqueue("/sensor/tvoc", tvoc_buf, tvoc_len, 1, 0);
         mqtt_enqueue("/sensor/eco2", eco2_buf, eco2_len, 1, 0);
         mqtt_enqueue("/sensor/temperature", temp_buf, temp_len, 1, 0);
         mqtt_enqueue("/sensor/pressure", pres_buf, pres_len, 1, 0);
+#if !DISABLE_HUMIDITY
         mqtt_enqueue("/sensor/humidity", hum_buf, hum_len, 1, 0);
+#endif
 
         ESP_LOGD(TAG, "TVOC: %s,  eCO2: %s, Temp: %s, Pres: %s, Hum: %s", tvoc_buf, eco2_buf, temp_buf, pres_buf, hum_buf);
     }
