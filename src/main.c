@@ -11,6 +11,8 @@
 #include "sensors.h"
 #include "ntp.h"
 #include "espnow.h"
+#include "driver/adc.h"
+#include "driver/gpio.h"
 
 #define DISABLE_HUMIDITY true
 
@@ -44,6 +46,51 @@ typedef struct {
     bool used;
 } peer_entry_t;
 
+// --- Joystick/Role Config ---
+#define JS_ADC_WIDTH          ADC_WIDTH_BIT_12   // 0..4095
+#define JS_ADC_ATTEN          ADC_ATTEN_DB_11    // voller Bereich bis ~3.3V
+// Passe die Kanäle an deine Pins an (z. B. VRx -> GPIO34 = ADC1_CH6, VRy -> GPIO35 = ADC1_CH7)
+#define JS_AXIS_X_CH          ADC1_CHANNEL_2     // GPIO2
+#define JS_AXIS_Y_CH          ADC1_CHANNEL_3     // GPIO3
+#define JS_BTN_GPIO           GPIO_NUM_27        // Joystick SW; GND beim Drücken
+#define JS_BTN_ACTIVE_LEVEL   0
+
+#define JS_SAMPLE_INTERVAL_MS 50
+#define JS_DEADZONE_PC        10     // Prozent rund um die Mitte
+#define JS_ACTIVITY_THRESHOLD 8      // Änderung in %-Punkten, die als "Bewegung" gilt
+#define ROLE_DECISION_MS      5000   // Wie lange nach Boot auf Aktivität warten
+
+// --- Befehlsprotokoll ---
+#define CMD_PROTO_VER 1
+#define CMD_MAGIC0    'C'
+#define CMD_MAGIC1    'M'
+
+typedef enum : uint8_t {
+    CMD_JOYSTICK = 1
+} cmd_type_t;
+
+typedef struct __attribute__((packed)) {
+    uint8_t magic[2]; // 'C','M'
+    uint8_t type;     // cmd_type_t
+    uint8_t ver;      // CMD_PROTO_VER
+} cmd_hdr_t;
+
+typedef struct __attribute__((packed)) {
+    cmd_hdr_t hdr;
+    int8_t x_pct;     // -100..+100 (links/rechts)
+    int8_t y_pct;     // -100..+100 (vor/zurück)
+    uint8_t buttons;  // Bit0: SW (gedrückt)
+} cmd_joystick_t;
+
+// --- Rollenstatus ---
+typedef enum {
+    ROLE_UNKNOWN = 0,
+    ROLE_CONTROLLER,
+    ROLE_CAR
+} role_t;
+
+static role_t s_role = ROLE_UNKNOWN;
+
 static peer_entry_t s_known_peers[ESPNOW_MAX_PEERS] = {0};
 
 // Hilfsfunktionen für Peerliste
@@ -66,6 +113,53 @@ static bool peer_add_local(const uint8_t mac[6]) {
         }
     }
     return false;
+}
+
+// Hilfsfunktionen Joystick
+static void joystick_init(void) {
+    adc1_config_width(JS_ADC_WIDTH);
+    adc1_config_channel_atten(JS_AXIS_X_CH, JS_ADC_ATTEN);
+    adc1_config_channel_atten(JS_AXIS_Y_CH, JS_ADC_ATTEN);
+
+    gpio_config_t io = {
+        .pin_bit_mask = 1ULL << JS_BTN_GPIO,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
+    gpio_config(&io);
+}
+
+static inline int read_raw_axis(adc1_channel_t ch) {
+    return adc1_get_raw(ch); // 0..4095
+}
+
+static int8_t normalize_axis_to_pct(int raw) {
+    // Map 0..4095 -> -100..100 mit Deadzone um Mitte (~2048)
+    const int max = 4095;
+    const int mid = max / 2;
+    const int span = max / 2;
+    const int dead = (JS_DEADZONE_PC * 100) / 100; // Prozent vom Prozent -> nutze später
+    int delta = raw - mid;
+
+    float pct = ((float)delta / (float)span) * 100.0f;
+    // Deadzone
+    if (pct > -JS_DEADZONE_PC && pct < JS_DEADZONE_PC) pct = 0.0f;
+    if (pct > 100.0f) pct = 100.0f;
+    if (pct < -100.0f) pct = -100.0f;
+    return (int8_t)pct;
+}
+
+static bool read_button_pressed(void) {
+    int level = gpio_get_level(JS_BTN_GPIO);
+    return (level == JS_BTN_ACTIVE_LEVEL);
+}
+
+static void apply_motor_command_log(int8_t x_pct, int8_t y_pct, bool btn) {
+    // Platzhalter-Endpunkt: später Motoren ansteuern
+    // y_pct > 0 vorwärts, < 0 rückwärts; x_pct < 0 links, > 0 rechts
+    ESP_LOGI("MOTOR", "Cmd: steer=%d%%, throttle=%d%%, btn=%d", (int)x_pct, (int)y_pct, (int)btn);
 }
 
 // ESPNOW-Empfangs-Callback: vollständige Nutzdaten
@@ -122,6 +216,30 @@ static void on_espnow_recv(const uint8_t mac[6], const uint8_t* data, size_t len
         }
     }
 
+    // Prüfe auf Steuerbefehle (CMD)
+    if (len >= sizeof(cmd_hdr_t)) {
+        const cmd_hdr_t* ch = (const cmd_hdr_t*)data;
+        if (ch->magic[0] == CMD_MAGIC0 && ch->magic[1] == CMD_MAGIC1 &&
+            ch->ver == CMD_PROTO_VER) {
+
+            if (ch->type == CMD_JOYSTICK && len >= sizeof(cmd_joystick_t)) {
+                const cmd_joystick_t* cj = (const cmd_joystick_t*)data;
+
+                // Wenn wir keine Controller-Rolle haben, übernehme Auto-Rolle
+                if (s_role != ROLE_CONTROLLER) {
+                    if (s_role != ROLE_CAR) {
+                        s_role = ROLE_CAR;
+                        ESP_LOGI("ROLE", "Rolle -> CAR (Empfänger) nach Eingang von Befehlen");
+                    }
+                }
+
+                const bool btn = (cj->buttons & 0x01) != 0;
+                apply_motor_command_log(cj->x_pct, cj->y_pct, btn);
+                return;
+            }
+        }
+    }
+
     // Normale Nutzdaten
     ESP_LOGI("ESPNOW", "Empfangen: %u Bytes von %02X:%02X:%02X:%02X:%02X:%02X",
              (unsigned)len, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -149,6 +267,76 @@ typedef struct __attribute__((packed)) {
     uint32_t counter;
     char     message[32]; // kurze Testnachricht
 } test_payload_t;
+
+// Joystick Sampling + Senden
+static void joystick_sender_task(void* arg) {
+    (void)arg;
+    joystick_init();
+
+    int8_t last_x = 0, last_y = 0;
+    bool last_btn = false;
+    uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    bool activity_detected = false;
+
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(JS_SAMPLE_INTERVAL_MS));
+
+        const int raw_x = read_raw_axis(JS_AXIS_X_CH);
+        const int raw_y = read_raw_axis(JS_AXIS_Y_CH);
+        const bool btn = read_button_pressed();
+
+        const int8_t x_pct = normalize_axis_to_pct(raw_x);
+        const int8_t y_pct = normalize_axis_to_pct(raw_y);
+
+        // Aktivitätserkennung in der Anlaufphase
+        uint32_t now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+        if (s_role == ROLE_UNKNOWN && (now_ms - t0) <= ROLE_DECISION_MS) {
+            if (abs(x_pct - last_x) >= JS_ACTIVITY_THRESHOLD ||
+                abs(y_pct - last_y) >= JS_ACTIVITY_THRESHOLD ||
+                btn != last_btn) {
+                activity_detected = true;
+            }
+        } else if (s_role == ROLE_UNKNOWN) {
+            // Zeitfenster vorbei -> Rolle festlegen
+            s_role = activity_detected ? ROLE_CONTROLLER : ROLE_CAR;
+            ESP_LOGI("ROLE", "Rolle entschieden: %s",
+                     s_role == ROLE_CONTROLLER ? "CONTROLLER (Sender)" : "CAR (Empfänger)");
+        }
+
+        // Wenn Controller -> Befehle senden
+        if (s_role == ROLE_CONTROLLER) {
+            // Paket bauen
+            cmd_joystick_t pkt = {0};
+            pkt.hdr.magic[0] = CMD_MAGIC0;
+            pkt.hdr.magic[1] = CMD_MAGIC1;
+            pkt.hdr.type = CMD_JOYSTICK;
+            pkt.hdr.ver = CMD_PROTO_VER;
+            pkt.x_pct = x_pct;
+            pkt.y_pct = y_pct;
+            pkt.buttons = btn ? 0x01 : 0x00;
+
+            // 1) Broadcast
+            espnow_send(ESPNOW_BCAST_MAC, &pkt, sizeof(pkt));
+
+            // 2) Unicast zu bekannten Peers
+            for (int i = 0; i < ESPNOW_MAX_PEERS; ++i) {
+                if (s_known_peers[i].used) {
+                    esp_err_t err = espnow_send(s_known_peers[i].mac, &pkt, sizeof(pkt));
+                    if (err != ESP_OK) {
+                        ESP_LOGW("ESPNOW", "Cmd an %02X:%02X:%02X:%02X:%02X:%02X fehlgeschlagen: %s",
+                                 s_known_peers[i].mac[0], s_known_peers[i].mac[1], s_known_peers[i].mac[2],
+                                 s_known_peers[i].mac[3], s_known_peers[i].mac[4], s_known_peers[i].mac[5],
+                                 esp_err_to_name(err));
+                    }
+                }
+            }
+        }
+
+        last_x = x_pct;
+        last_y = y_pct;
+        last_btn = btn;
+    }
+}
 
 // Sende-Task: schickt alle 3s ein Testpaket an alle bekannten Peers und einmal Broadcast
 static void espnow_test_sender_task(void* arg)
@@ -263,7 +451,9 @@ void app_main(void)
 
     // Discovery-Task starten
     xTaskCreate(espnow_discovery_task, "espnow_disc", 2048, NULL, 8, NULL);
-    xTaskCreate(espnow_test_sender_task, "espnow_test", 2048, NULL, 8, NULL);
+
+    // Joystick + Rollenerkennung & Senden
+    xTaskCreate(joystick_sender_task, "js_sender", 4096, NULL, 9, NULL);
 
     // ESP_LOGI(TAG, "Starte MQTT");
     // mqtt_app_start();
