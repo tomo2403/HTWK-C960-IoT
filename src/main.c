@@ -60,6 +60,8 @@ typedef struct {
 #define JS_ACTIVITY_THRESHOLD 8      // Änderung in %-Punkten, die als "Bewegung" gilt
 #define ROLE_DECISION_MS      5000   // Wie lange nach Boot auf Aktivität warten
 #define JS_CALIB_MS           800    // Zeitfenster zur Mittelwert-Kalibrierung
+#define JS_CALIB_SWEEP_MS     3000   // Zusätzliche Zeit zum Erfassen von min/max der Achsen
+#define JS_ADAPT_EPS          2      // Rohwert-Differenz, ab der min/max adaptiv erweitert werden
 
 // --- Befehlsprotokoll ---
 #define CMD_PROTO_VER 1
@@ -134,6 +136,43 @@ static void joystick_init(void) {
 
 static inline int read_raw_axis(adc1_channel_t ch) {
     return adc1_get_raw(ch); // 0..4095
+}
+
+// Neue Kalibrierstruktur je Achse
+typedef struct {
+    int min;
+    int mid;
+    int max;
+    bool inited;
+} axis_calib_t;
+
+static int8_t normalize_axis_with_cal(int raw, const axis_calib_t* c) {
+    if (!c || !c->inited) return 0;
+
+    // Schutz vor degenerate ranges
+    const int pos_span = (c->max > c->mid) ? (c->max - c->mid) : 1;
+    const int neg_span = (c->mid > c->min) ? (c->mid - c->min) : 1;
+
+    float pct;
+    if (raw >= c->mid) {
+        pct = ((float)(raw - c->mid) / (float)pos_span) * 100.0f;
+    } else {
+        pct = -((float)(c->mid - raw) / (float)neg_span) * 100.0f;
+    }
+
+    // Deadzone um 0
+    if (pct > -JS_DEADZONE_PC && pct < JS_DEADZONE_PC) pct = 0.0f;
+
+    if (pct > 100.0f) pct = 100.0f;
+    if (pct < -100.0f) pct = -100.0f;
+    return (int8_t)pct;
+}
+
+// Optional: leichte adaptive Erweiterung, falls neue Extrema erreicht werden
+static void adapt_axis_calib(axis_calib_t* c, int raw) {
+    if (!c || !c->inited) return;
+    if (raw > c->max + JS_ADAPT_EPS) c->max = raw;
+    if (raw < c->min - JS_ADAPT_EPS) c->min = raw;
 }
 
 // Kalibrierte Normalisierung: mappe Rohwert relativ zu kalibriertem Mittelpunkt auf -100..100
@@ -280,7 +319,7 @@ static void joystick_sender_task(void* arg) {
     (void)arg;
     joystick_init();
 
-    // Mittelpunkt-Kalibrierung
+    // Phase 1: Mittelpunkt-Kalibrierung
     uint32_t start_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     uint32_t now_ms = start_ms;
     uint32_t cnt = 0;
@@ -293,9 +332,37 @@ static void joystick_sender_task(void* arg) {
         vTaskDelay(pdMS_TO_TICKS(10));
         now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     }
-    int mid_x = (cnt > 0) ? (int)(sum_x / cnt) : 2048;
-    int mid_y = (cnt > 0) ? (int)(sum_y / cnt) : 2048;
-    ESP_LOGI("JOYSTICK", "Kalibriert: mid_x=%d, mid_y=%d (Samples=%u)", mid_x, mid_y, (unsigned)cnt);
+    axis_calib_t cal_x = {0}, cal_y = {0};
+    cal_x.mid = (cnt > 0) ? (int)(sum_x / cnt) : 2048;
+    cal_y.mid = (cnt > 0) ? (int)(sum_y / cnt) : 2048;
+
+    // Phase 2: Sweep für min/max (bitte in der Zeit einmal zu allen Extremen bewegen)
+    start_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    now_ms = start_ms;
+    cal_x.min = cal_x.max = cal_x.mid;
+    cal_y.min = cal_y.max = cal_y.mid;
+
+    while ((now_ms - start_ms) < JS_CALIB_SWEEP_MS) {
+        const int rx = read_raw_axis(JS_AXIS_X_CH);
+        const int ry = read_raw_axis(JS_AXIS_Y_CH);
+
+        if (rx < cal_x.min) cal_x.min = rx;
+        if (rx > cal_x.max) cal_x.max = rx;
+        if (ry < cal_y.min) cal_y.min = ry;
+        if (ry > cal_y.max) cal_y.max = ry;
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+        now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    }
+
+    // Fallbacks, falls keine Bewegung stattfand
+    if (cal_x.min == cal_x.max) { cal_x.min = cal_x.mid - 100; cal_x.max = cal_x.mid + 100; }
+    if (cal_y.min == cal_y.max) { cal_y.min = cal_y.mid - 100; cal_y.max = cal_y.mid + 100; }
+    cal_x.inited = true;
+    cal_y.inited = true;
+
+    ESP_LOGI("JOYSTICK", "Cal X: min=%d mid=%d max=%d | Cal Y: min=%d mid=%d max=%d",
+             cal_x.min, cal_x.mid, cal_x.max, cal_y.min, cal_y.mid, cal_y.max);
 
     int8_t last_x = 0, last_y = 0;
     bool last_btn = false;
@@ -309,13 +376,16 @@ static void joystick_sender_task(void* arg) {
         const int raw_y = read_raw_axis(JS_AXIS_Y_CH);
         const bool btn = read_button_pressed();
 
-        // Normalisieren mit kalibriertem Mittelpunkt
-        int8_t x_pct = normalize_axis_to_pct_cal(raw_x, mid_x);
-        int8_t y_pct = normalize_axis_to_pct_cal(raw_y, mid_y);
+        // Adaptiv Extrema leicht erweitern (optional)
+        adapt_axis_calib(&cal_x, raw_x);
+        adapt_axis_calib(&cal_y, raw_y);
 
-        // Hinweis: Falls Achsen invertiert sind, hier invertieren:
-        // x_pct = -x_pct;  // bei Bedarf
-        // y_pct = -y_pct;  // bei Bedarf
+        int8_t x_pct = normalize_axis_with_cal(raw_x, &cal_x);
+        int8_t y_pct = normalize_axis_with_cal(raw_y, &cal_y);
+
+        // Hinweis: Achsen bei Bedarf invertieren
+        // x_pct = -x_pct; // falls rechts/links vertauscht
+        // y_pct = -y_pct; // falls vor/zurück vertauscht
 
         // Aktivitätserkennung in der Anlaufphase
         uint32_t now_ms2 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
@@ -326,7 +396,6 @@ static void joystick_sender_task(void* arg) {
                 activity_detected = true;
             }
         } else if (s_role == ROLE_UNKNOWN) {
-            // Zeitfenster vorbei -> Rolle festlegen
             s_role = activity_detected ? ROLE_CONTROLLER : ROLE_CAR;
             ESP_LOGI("ROLE", "Rolle entschieden: %s",
                      s_role == ROLE_CONTROLLER ? "CONTROLLER (Sender)" : "CAR (Empfänger)");
