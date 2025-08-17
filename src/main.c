@@ -52,13 +52,14 @@ typedef struct {
 // Passe die Kanäle an deine Pins an (z. B. VRx -> GPIO34 = ADC1_CH6, VRy -> GPIO35 = ADC1_CH7)
 #define JS_AXIS_X_CH          ADC1_CHANNEL_2     // GPIO2
 #define JS_AXIS_Y_CH          ADC1_CHANNEL_3     // GPIO3
-#define JS_BTN_GPIO           GPIO_NUM_27        // Joystick SW; GND beim Drücken
+#define JS_BTN_GPIO           GPIO_NUM_11        // Joystick SW; GND beim Drücken
 #define JS_BTN_ACTIVE_LEVEL   0
 
 #define JS_SAMPLE_INTERVAL_MS 50
 #define JS_DEADZONE_PC        10     // Prozent rund um die Mitte
 #define JS_ACTIVITY_THRESHOLD 8      // Änderung in %-Punkten, die als "Bewegung" gilt
 #define ROLE_DECISION_MS      5000   // Wie lange nach Boot auf Aktivität warten
+#define JS_CALIB_MS           800    // Zeitfenster zur Mittelwert-Kalibrierung
 
 // --- Befehlsprotokoll ---
 #define CMD_PROTO_VER 1
@@ -135,17 +136,23 @@ static inline int read_raw_axis(adc1_channel_t ch) {
     return adc1_get_raw(ch); // 0..4095
 }
 
-static int8_t normalize_axis_to_pct(int raw) {
-    // Map 0..4095 -> -100..100 mit Deadzone um Mitte (~2048)
+// Kalibrierte Normalisierung: mappe Rohwert relativ zu kalibriertem Mittelpunkt auf -100..100
+static int8_t normalize_axis_to_pct_cal(int raw, int mid) {
     const int max = 4095;
-    const int mid = max / 2;
-    const int span = max / 2;
-    const int dead = (JS_DEADZONE_PC * 100) / 100; // Prozent vom Prozent -> nutze später
-    int delta = raw - mid;
+    // Asymmetrische Spannen links/rechts um Mittelwert
+    const float span_pos = (float)(max - mid);
+    const float span_neg = (float)(mid - 0);
+    float pct;
 
-    float pct = ((float)delta / (float)span) * 100.0f;
-    // Deadzone
+    if (raw >= mid) {
+        pct = (span_pos > 1.0f) ? ((float)(raw - mid) / span_pos) * 100.0f : 0.0f;
+    } else {
+        pct = (span_neg > 1.0f) ? ((float)(raw - mid) / span_neg) * 100.0f : 0.0f;
+    }
+
+    // Deadzone um 0
     if (pct > -JS_DEADZONE_PC && pct < JS_DEADZONE_PC) pct = 0.0f;
+
     if (pct > 100.0f) pct = 100.0f;
     if (pct < -100.0f) pct = -100.0f;
     return (int8_t)pct;
@@ -273,6 +280,23 @@ static void joystick_sender_task(void* arg) {
     (void)arg;
     joystick_init();
 
+    // Mittelpunkt-Kalibrierung
+    uint32_t start_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    uint32_t now_ms = start_ms;
+    uint32_t cnt = 0;
+    uint64_t sum_x = 0, sum_y = 0;
+
+    while ((now_ms - start_ms) < JS_CALIB_MS) {
+        sum_x += (uint32_t)read_raw_axis(JS_AXIS_X_CH);
+        sum_y += (uint32_t)read_raw_axis(JS_AXIS_Y_CH);
+        cnt++;
+        vTaskDelay(pdMS_TO_TICKS(10));
+        now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    }
+    int mid_x = (cnt > 0) ? (int)(sum_x / cnt) : 2048;
+    int mid_y = (cnt > 0) ? (int)(sum_y / cnt) : 2048;
+    ESP_LOGI("JOYSTICK", "Kalibriert: mid_x=%d, mid_y=%d (Samples=%u)", mid_x, mid_y, (unsigned)cnt);
+
     int8_t last_x = 0, last_y = 0;
     bool last_btn = false;
     uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
@@ -285,12 +309,17 @@ static void joystick_sender_task(void* arg) {
         const int raw_y = read_raw_axis(JS_AXIS_Y_CH);
         const bool btn = read_button_pressed();
 
-        const int8_t x_pct = normalize_axis_to_pct(raw_x);
-        const int8_t y_pct = normalize_axis_to_pct(raw_y);
+        // Normalisieren mit kalibriertem Mittelpunkt
+        int8_t x_pct = normalize_axis_to_pct_cal(raw_x, mid_x);
+        int8_t y_pct = normalize_axis_to_pct_cal(raw_y, mid_y);
+
+        // Hinweis: Falls Achsen invertiert sind, hier invertieren:
+        // x_pct = -x_pct;  // bei Bedarf
+        // y_pct = -y_pct;  // bei Bedarf
 
         // Aktivitätserkennung in der Anlaufphase
-        uint32_t now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
-        if (s_role == ROLE_UNKNOWN && (now_ms - t0) <= ROLE_DECISION_MS) {
+        uint32_t now_ms2 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+        if (s_role == ROLE_UNKNOWN && (now_ms2 - t0) <= ROLE_DECISION_MS) {
             if (abs(x_pct - last_x) >= JS_ACTIVITY_THRESHOLD ||
                 abs(y_pct - last_y) >= JS_ACTIVITY_THRESHOLD ||
                 btn != last_btn) {
