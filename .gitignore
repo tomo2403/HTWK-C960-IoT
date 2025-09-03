@@ -162,3 +162,7 @@ Temporary Items
 
 .pio
 secrets.h
+
+.vscode
+build
+sdkconfig
