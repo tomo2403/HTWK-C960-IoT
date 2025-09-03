@@ -12,6 +12,7 @@
 #include "ntp.h"
 #include "espnow.h"
 #include "joystick.h"
+#include "motor.h"
 
 #define DISABLE_HUMIDITY true
 
@@ -143,6 +144,8 @@ void on_espnow_recv(const uint8_t mac[6], const uint8_t* data, size_t len, void*
 
                 const bool btn = (cj->buttons & 0x01) != 0;
                 apply_motor_command_log(cj->x_pct, cj->y_pct, btn);
+
+
                 return;
             }
         }
