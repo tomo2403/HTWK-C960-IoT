@@ -21,8 +21,8 @@
 
 
 void motor_init(void) {
-    gpio_config_t gpioConfig = {
-        .pin_bit_mask = {(1 << MTR1_PIN1_GPIO) | (1 << MTR1_PIN2_GPIO) | (1 << MTR2_PIN1_GPIO) | (1 << MTR2_PIN2_GPIO )},
+    const gpio_config_t gpioConfig = {
+        .pin_bit_mask = 1 << MTR1_PIN1_GPIO | 1 << MTR1_PIN2_GPIO | 1 << MTR2_PIN1_GPIO | 1 << MTR2_PIN2_GPIO,
         .mode = GPIO_MODE_INPUT_OUTPUT,
         .pull_up_en = false,
         .pull_down_en = false,
@@ -31,39 +31,39 @@ void motor_init(void) {
 
     gpio_config(&gpioConfig);
 
-    ledc_timer_config_t ledc_timer = {
+    const ledc_timer_config_t ledc_timer = {
         .speed_mode       = LEDC_LOW_SPEED_MODE,
-        .timer_num        = LEDC_TIMER_0,
         .duty_resolution  = LEDC_TIMER_10_BIT,
+        .timer_num        = LEDC_TIMER_0,
         .freq_hz          = 1000,  // Set output frequency at 50 Hz; 20 ms period length
         .clk_cfg          = LEDC_AUTO_CLK
     };
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
-    ledc_channel_config_t ledc_channel = {
+    const ledc_channel_config_t ledc_channel = {
+        .gpio_num       = MTR1_PWM_GPIO,
         .speed_mode     = LEDC_LOW_SPEED_MODE,
         .channel        = LEDC_CHANNEL_0,
-        .timer_sel      = LEDC_TIMER_0,
         .intr_type      = LEDC_INTR_DISABLE,
-        .gpio_num       = MTR1_PWM_GPIO,
+        .timer_sel      = LEDC_TIMER_0,
         .duty           = 0, // Set duty to 50% // mid position
         .hpoint         = 0,
         //.flags.output_invert = 1
     };
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 
-    ledc_channel_config_t ledc_channel1 = {
+    const ledc_channel_config_t ledc_channel1 = {
+        .gpio_num       = MTR2_PWM_GPIO,
         .speed_mode     = LEDC_LOW_SPEED_MODE,
         .channel        = LEDC_CHANNEL_1,
-        .timer_sel      = LEDC_TIMER_0,
         .intr_type      = LEDC_INTR_DISABLE,
-        .gpio_num       = MTR2_PWM_GPIO,
+        .timer_sel      = LEDC_TIMER_0,
         .duty           = 0,
         .hpoint         = 0,
     };
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel1));
 }
 
-void set_motor1(int8_t percentage) {
+void set_motor1(const int8_t percentage) {
     if (percentage > 0) {
         gpio_set_level(MTR1_PIN1_GPIO, 0);
         gpio_set_level(MTR1_PIN2_GPIO, 1);
@@ -72,13 +72,13 @@ void set_motor1(int8_t percentage) {
         gpio_set_level(MTR1_PIN1_GPIO, 1);
     }
 
-    uint32_t duty = abs(percentage) * 5 + 500;
+    const uint32_t duty = abs(percentage) * 5 + 500;
     ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty));
     ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
 }
 
 
-void set_motor2(int8_t percentage) {
+void set_motor2(const int8_t percentage) {
     if (percentage > 0) {
         gpio_set_level(MTR2_PIN1_GPIO, 1);
         gpio_set_level(MTR2_PIN2_GPIO, 0);
@@ -87,7 +87,7 @@ void set_motor2(int8_t percentage) {
         gpio_set_level(MTR2_PIN1_GPIO, 0);
         }
 
-    uint32_t duty = abs(percentage) * 5 + 500;
+    const uint32_t duty = abs(percentage) * 5 + 500;
     ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, duty));
     ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1));
 }
