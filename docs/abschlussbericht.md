@@ -64,6 +64,17 @@ Entscheidungen:
 - MQTT für Telemetrie, da Interoperabilität, Tools und Backend-Anbindung wichtig sind.
 - NTP statt RTC-Batterie: einfach, präzise genug, wenig Hardware-Aufwand.
 
+Backend-Stack (Docker-Compose, für Speicherung/Visualisierung):
+- mosquitto (MQTT, 1883) – Config: backend/mosquitto.conf, Volumes: mosquitto_data, mosquitto_log
+- telegraf (MQTT-Consumer → Influx) – Config: backend/telegraf.conf
+- influxdb (v2, 8086) – env: backend/influxdb.env, Volumes: influxdb_data, influxdb_config
+- grafana (3000) – env: backend/grafana.env, Volume: grafana_storage
+
+Datenfluss:
+- ESP32 → MQTT-Topics /sensor/# (tvoc, eco2, temperature, pressure, optional humidity)
+- Telegraf liest MQTT als value/float und schreibt nach InfluxDB (outputs.influxdb_v2)
+- Grafana visualisiert per InfluxDB-Data-Source
+
 ## 5. Implementierung
 Wesentliche Abläufe:
 1) Systemstart und Netzanbindung (main.c)
@@ -123,23 +134,29 @@ Struktur (Auszug):
 - test/: Unit-/Komponententests (z. B. NTP)
 - docs/: Dokumente (dieser Bericht)
 
-Setup (PlatformIO):
+Setup (PlatformIO & Backend):
 1. secrets.h auf Basis von include/example.secrets.h ausfüllen (WLAN/MQTT).
 2. Ziel-Board/Environment in platformio.ini wählen.
 3. Build & Flash via PlatformIO. Serielle Konsole für Logs öffnen.
 4. Joystick für die Kalibrierung in alle Richtungen bewegen.
-5. backend mit docker-compose starten.
-6. Neue Connection einrichten 
-   - Name: Provide a name for the data source.
+5. Backend starten: in backend/ wechseln und docker compose up -d
+6. Grafana: InfluxDB v2 Data Source anlegen:
    - Query Language: Flux
-   - HTTP URL: http://influxdb:8086.
-   - Auth: Basic auth
-   - Basic Auth Details: username and password defined in influxdb.env
-   - InfluxDB Details:
-     - Organization: defined in influxdb.env
-     - Token: defined in influxdb.env
-     - Default Bucket: defined in influxdb.env
-7. Grafana öffnen und Dashboard aus dashboard.json importieren.
+   - URL: http://influxdb:8086
+   - InfluxDB Details (aus backend/influxdb.env):
+     - Organization: DOCKER_INFLUXDB_INIT_ORG
+     - Token: DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
+     - Default Bucket: DOCKER_INFLUXDB_INIT_BUCKET
+7. Dashboard aus backend/dashboard.json importieren.
+
+Sicherheit & Betrieb:
+- MQTT: allow_anonymous=true nur für lokale Demos geeignet; für Produktion deaktivieren oder TLS/Benutzer konfigurieren.
+- InfluxDB/Grafana: Beispiel-Passwörter und Token aus den *.env-Dateien ändern/rotieren; Volumes sichern; Updates via docker compose pull && docker compose up -d.
+
+Troubleshooting:
+- Ports belegt: Prüfen, ob bereits lokale Mosquitto/Influx/Grafana laufen.
+- Telegraf schreibt nichts: telegraf.conf (URLs/Tokens) prüfen; Container-Logs: docker logs telegraf.
+- MQTT kommt nicht an: Broker-Host/Port prüfen; Test mit mosquitto_sub -h localhost -t "/sensor/#" -v.
 
 Beispielnutzung:
 - MQTT-Broker starten (z. B. mosquitto) und auf Topics /sensor/* subscriben.
