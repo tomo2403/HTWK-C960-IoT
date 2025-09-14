@@ -128,6 +128,18 @@ Setup (PlatformIO):
 2. Ziel-Board/Environment in platformio.ini wählen.
 3. Build & Flash via PlatformIO. Serielle Konsole für Logs öffnen.
 4. Joystick für die Kalibrierung in alle Richtungen bewegen.
+5. backend mit docker-compose starten.
+6. Neue Connection einrichten 
+   - Name: Provide a name for the data source.
+   - Query Language: Flux
+   - HTTP URL: http://influxdb:8086.
+   - Auth: Basic auth
+   - Basic Auth Details: username and password defined in influxdb.env
+   - InfluxDB Details:
+     - Organization: defined in influxdb.env
+     - Token: defined in influxdb.env
+     - Default Bucket: defined in influxdb.env
+7. Grafana öffnen und Dashboard aus dashboard.json importieren.
 
 Beispielnutzung:
 - MQTT-Broker starten (z. B. mosquitto) und auf Topics /sensor/* subscriben.
