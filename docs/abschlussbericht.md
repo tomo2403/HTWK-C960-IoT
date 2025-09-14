@@ -41,7 +41,7 @@ Nicht-funktionale Anforderungen:
 - Moderate CPU-/RAM-Nutzung, geeignet für ESP32-Klassen.
 - Latenzarmes ESPNOW (<100 ms) für Steuerkommandos.
 
-![architecture.png](architecture.png)
+![architecture.png](../assets/architecture.png)
 
 ## 4. Architektur und Umsetzung
 Übersicht:
@@ -163,5 +163,8 @@ Beispielnutzung:
 - Zweites Board als Controller flashen; Joystick bewegen → Car reagiert über ESPNOW.
 
 ## 9. Lizenz
-- Projektlizenz: siehe LICENSE (OSS, kompatibel mit verwendeten Komponenten).
-- Drittlizenzen: components/bmx280 (MIT/ähnlich), components/sgp30 (entsprechend in den Unterordnern dokumentiert).
+- Projektlizenz: MIT
+
+- Drittlizenzen:
+  - SGP30 Library: https://github.com/co-env/esp32_SGP30 (MIT)
+  - BMX280 Library: https://github.com/utkumaden/esp-idf-bmx280 (MIT, unclear)
