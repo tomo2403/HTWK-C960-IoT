@@ -75,6 +75,9 @@ Datenfluss:
 - Telegraf liest MQTT als value/float und schreibt nach InfluxDB (outputs.influxdb_v2)
 - Grafana visualisiert per InfluxDB-Data-Source
 
+![controller_circuit.png](../assets/controller_circuit.png)
+![car_circuit.png](../assets/car_circuit.png)
+
 ## 5. Implementierung
 Wesentliche Abläufe:
 1) Systemstart und Netzanbindung (main.c)
@@ -105,6 +108,8 @@ Wesentliche Abläufe:
 
 Sprachen/Tools:
 - C/ESP-IDF, FreeRTOS, PlatformIO; externe Sensor-Treiber in components/.
+
+![dashboard.png](../assets/dashboard.png)
 
 ## 6. Tests und Ergebnisse
 - NTP-Test: test/test_ntp_obtain_time/test_main.c verifiziert erfolgreiche Zeitsynchronisation.
