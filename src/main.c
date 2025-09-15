@@ -14,9 +14,12 @@
 #include "joystick.h"
 #include "motor.h"
 #include "driver/gpio.h"
+#include "led_config.h"
 
 
 #define DISABLE_HUMIDITY true
+
+
 
 static const char *TAG = "AppManager";
 
@@ -421,7 +424,11 @@ void app_main(void)
     // Joystick + Rollenerkennung & Senden
     xTaskCreate(joystick_sender_task, "js_sender", 4096, NULL, 9, NULL);
 
+    button_led_init();
+    setup_hw_timer_led();
     motor_init();
+    registerKeyCallback(keyCallback);
+
 
     while (s_role == ROLE_UNKNOWN) {
         vTaskDelay(500 / portTICK_PERIOD_MS);
