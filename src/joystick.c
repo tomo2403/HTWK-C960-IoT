@@ -79,7 +79,7 @@ bool read_button_pressed(void) {
 }
 
 void apply_motor_command_log(int8_t x_pct, int8_t y_pct, bool btn) {
-    motor_init();
+
     set_motor1(x_pct);
     set_motor2(y_pct);
     // Platzhalter-Endpunkt: später Motoren ansteuern

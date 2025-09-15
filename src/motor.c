@@ -66,40 +66,46 @@ void motor_init(void) {
 }
 
 void set_motor1(const int8_t percentage) {
-    if (percentage > 10) {
+
+    const uint32_t duty = (uint32_t) abs(percentage) * 5 + 423;
+
+    if (percentage > 0) {
         gpio_set_level(MTR1_PIN1_GPIO, 0);
         gpio_set_level(MTR1_PIN2_GPIO, 1);
-    } else if (percentage < -10) {
+        ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty));
+        ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
+    } else if (percentage < 0) {
         gpio_set_level(MTR1_PIN2_GPIO, 0);
         gpio_set_level(MTR1_PIN1_GPIO, 1);
-    } else {
-        ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
+        ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty));
         ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
+    } else {
+        stop_motor1();
+        //ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
+        //ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
     }
-
-    const uint32_t duty = (uint32_t) abs(percentage) * 5 + 523;
-    ESP_LOGI("MOTOR", "duty: %ul", duty);
-    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty));
-    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
 }
 
 
 void set_motor2(const int8_t percentage) {
-    if (percentage > 10) {
+    const uint32_t duty = (uint32_t) abs(percentage) * 6 + 423;
+    if (percentage > 0) {
         gpio_set_level(MTR2_PIN1_GPIO, 1);
         gpio_set_level(MTR2_PIN2_GPIO, 0);
-    } else if (percentage < -10) {
+        ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, duty));
+        ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1));
+    } else if (percentage < 0) {
         gpio_set_level(MTR2_PIN2_GPIO, 1);
         gpio_set_level(MTR2_PIN1_GPIO, 0);
-    } else {
-        //stop_motor2();
-        ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, 0));
+        ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, duty));
         ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1));
+    } else {
+        stop_motor2();
+        //ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, 0));
+        //ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1));
     }
 
-    const uint32_t duty = (uint32_t) abs(percentage) * 6 + 423;
-    ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, duty));
-    ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1));
+
 }
 
 void stop_motor1() {

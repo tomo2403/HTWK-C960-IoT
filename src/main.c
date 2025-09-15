@@ -418,13 +418,15 @@ void app_main(void)
     // Joystick + Rollenerkennung & Senden
     xTaskCreate(joystick_sender_task, "js_sender", 4096, NULL, 9, NULL);
 
+    motor_init();
+
     while (s_role == ROLE_UNKNOWN) {
         vTaskDelay(500 / portTICK_PERIOD_MS);
     }
     if (s_role == ROLE_CONTROLLER) {
         return;
     }
-
+    /*
     ESP_LOGI(TAG, "Starte MQTT");
     mqtt_app_start();
 
@@ -440,4 +442,5 @@ void app_main(void)
 
     ESP_LOGI(TAG, "Starte Sensor Task");
     xTaskCreate(postSensorData, "sensor_task", 1024 * 2, 0, 10, NULL);
+*/
 }
