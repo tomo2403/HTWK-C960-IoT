@@ -19,9 +19,9 @@
 #define JS_ACTIVITY_THRESHOLD 8      // Änderung in %-Punkten, die als "Bewegung" gilt
 #define ROLE_DECISION_MS      5000   // Wie lange nach Boot auf Aktivität warten
 #define JS_CALIB_MS           800    // Zeitfenster zur Mittelwert-Kalibrierung
-#define JS_CALIB_SWEEP_MS     3000   // Zusätzliche Zeit zum Erfassen von min/max der Achsen
+#define JS_CALIB_SWEEP_MS     5000   // Zusätzliche Zeit zum Erfassen von min/max der Achsen
 #define JS_ADAPT_EPS          2      // Rohwert-Differenz, ab der min/max adaptiv erweitert werden
-
+#define LED_CALIB_SWEEP		  0		 // Pin für die LED, die zum Callibrieren leuchtet
 // --- Befehlsprotokoll ---
 #define CMD_PROTO_VER 1
 #define CMD_MAGIC0    'C'
@@ -78,5 +78,9 @@ int8_t normalize_axis_to_pct_cal(int raw, int mid);
 bool read_button_pressed(void);
 
 void apply_motor_command_log(int8_t x_pct, int8_t y_pct, bool btn);
+
+void led_calib_init();
+
+void led_calib_toggle();
 
 #endif //HTWK_C960_IOT_JOYSTICK_H

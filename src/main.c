@@ -212,6 +212,9 @@ void joystick_sender_task(void* arg) {
     cal_x.min = cal_x.max = cal_x.mid;
     cal_y.min = cal_y.max = cal_y.mid;
 
+    led_calib_init();
+    led_calib_toggle();
+
     while ((now_ms - start_ms) < JS_CALIB_SWEEP_MS) {
         const int rx = read_raw_axis(JS_AXIS_X_CH);
         const int ry = read_raw_axis(JS_AXIS_Y_CH);
@@ -224,6 +227,7 @@ void joystick_sender_task(void* arg) {
         vTaskDelay(pdMS_TO_TICKS(10));
         now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     }
+    led_calib_toggle();
 
     // Fallbacks, falls keine Bewegung stattfand
     if (cal_x.min == cal_x.max) { cal_x.min = cal_x.mid - 100; cal_x.max = cal_x.mid + 100; }
