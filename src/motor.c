@@ -23,6 +23,7 @@
 
 
 void motor_init(void) {
+    
     const gpio_config_t gpioConfig = {
         .pin_bit_mask = 1 << MTR1_PIN1_GPIO | 1 << MTR1_PIN2_GPIO | 1 << MTR2_PIN1_GPIO | 1 << MTR2_PIN2_GPIO,
         .mode = GPIO_MODE_INPUT_OUTPUT,

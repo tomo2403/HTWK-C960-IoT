@@ -2,8 +2,8 @@
 #include "driver/timer.h"
 #include "esp_intr_alloc.h"
 #include "led_config.h"
-
 #include <esp_log.h>
+
 #define BTN_GPIO GPIO_NUM_10
 #define LED1_GPIO GPIO_NUM_6
 #define LED2_GPIO GPIO_NUM_7
@@ -20,10 +20,9 @@ void btn_isr_handler(void* arg) {
     }
 }
 
-
 void keyCallback(uint8_t key) {
     blink_enabled = !blink_enabled;
-    if (blink_enabled) {
+    if (!blink_enabled) {
         gpio_set_level(LED1_GPIO, 0);
         gpio_set_level(LED2_GPIO, 0);
     }
@@ -79,6 +78,7 @@ void setup_hw_timer_led() {
         .alarm_en = TIMER_ALARM_EN,
         .auto_reload = true,
     };
+
     timer_init(TIMER_GROUP_0, TIMER_0, &config);
     timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0);
     timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, 5000); // 500ms (10kHz * 0.5s)
