@@ -166,3 +166,4 @@ secrets.h
 .vscode
 build
 sdkconfig
+platformio.ini

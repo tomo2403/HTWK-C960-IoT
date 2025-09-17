@@ -56,7 +56,7 @@ void button_led_init() {
     gpio_config(&gpioConfig);
 }
 
-
+// Timer Interrupt Service Routine - steuert Blaulicht
 void IRAM_ATTR timer_isr(void* arg) {
     if (blink_enabled) {
         uint32_t ledLevel = gpio_get_level(LED1_GPIO);
@@ -69,6 +69,7 @@ void IRAM_ATTR timer_isr(void* arg) {
     timer_group_enable_alarm_in_isr(TIMER_GROUP_0, TIMER_0);
 }
 
+// HW-Timer für LED-Blinken konfigurieren
 void setup_hw_timer_led() {
 
     timer_config_t config = {
@@ -79,9 +80,11 @@ void setup_hw_timer_led() {
         .auto_reload = true,
     };
 
+    int blinktime_interval_ms = 500;
+
     timer_init(TIMER_GROUP_0, TIMER_0, &config);
     timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0);
-    timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, 5000); // 500ms (10kHz * 0.5s)
+    timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, blinktime_interval_ms*10); // 500ms (10kHz * 0.5s)
     timer_enable_intr(TIMER_GROUP_0, TIMER_0);
     timer_isr_register(TIMER_GROUP_0, TIMER_0, timer_isr, NULL, ESP_INTR_FLAG_IRAM, NULL);
     timer_start(TIMER_GROUP_0, TIMER_0);

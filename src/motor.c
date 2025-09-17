@@ -24,6 +24,7 @@
 
 void motor_init(void) {
     
+    // Set GPIOs for Motor Driver as Outputs
     const gpio_config_t gpioConfig = {
         .pin_bit_mask = 1 << MTR1_PIN1_GPIO | 1 << MTR1_PIN2_GPIO | 1 << MTR2_PIN1_GPIO | 1 << MTR2_PIN2_GPIO,
         .mode = GPIO_MODE_INPUT_OUTPUT,
@@ -33,7 +34,7 @@ void motor_init(void) {
     };
 
     gpio_config(&gpioConfig);
-
+    // pwm Timer setup
     const ledc_timer_config_t ledc_timer = {
         .speed_mode       = LEDC_LOW_SPEED_MODE,
         .duty_resolution  = LEDC_TIMER_10_BIT,
@@ -42,6 +43,7 @@ void motor_init(void) {
         .clk_cfg          = LEDC_AUTO_CLK
     };
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
+    
     const ledc_channel_config_t ledc_channel = {
         .gpio_num       = MTR1_PWM_GPIO,
         .speed_mode     = LEDC_LOW_SPEED_MODE,
