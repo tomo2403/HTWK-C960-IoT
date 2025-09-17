@@ -43,7 +43,8 @@ void motor_init(void) {
         .clk_cfg          = LEDC_AUTO_CLK
     };
     ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
-    
+
+    // pwm channel and pin setup for Motor 1
     const ledc_channel_config_t ledc_channel = {
         .gpio_num       = MTR1_PWM_GPIO,
         .speed_mode     = LEDC_LOW_SPEED_MODE,
@@ -55,7 +56,7 @@ void motor_init(void) {
         //.flags.output_invert = 1
     };
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
-
+    // pwm channel and pin setup for Motor 2
     const ledc_channel_config_t ledc_channel1 = {
         .gpio_num       = MTR2_PWM_GPIO,
         .speed_mode     = LEDC_LOW_SPEED_MODE,
@@ -70,8 +71,10 @@ void motor_init(void) {
 
 void set_motor1(const int8_t percentage) {
 
+    //duty = startvalue + incoming percentage from controller
     const uint32_t duty = (uint32_t) abs(percentage) * 5 + 423;
 
+    // car drives forward or backward depending on sign of percentage
     if (percentage > 0) {
         gpio_set_level(MTR1_PIN1_GPIO, 0);
         gpio_set_level(MTR1_PIN2_GPIO, 1);
@@ -84,14 +87,15 @@ void set_motor1(const int8_t percentage) {
         ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
     } else {
         stop_motor1();
-        //ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
-        //ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
     }
 }
 
 
 void set_motor2(const int8_t percentage) {
+    //duty = startvalue + incoming percentage from controller
     const uint32_t duty = (uint32_t) abs(percentage) * 6 + 423;
+
+    // car drives forward or backward depending on sign of percentage
     if (percentage > 0) {
         gpio_set_level(MTR2_PIN1_GPIO, 1);
         gpio_set_level(MTR2_PIN2_GPIO, 0);
@@ -104,17 +108,15 @@ void set_motor2(const int8_t percentage) {
         ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1));
     } else {
         stop_motor2();
-        //ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, 0));
-        //ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1));
     }
 
 
 }
 
 void stop_motor1() {
-
-    gpio_set_level(MTR2_PIN1_GPIO, 1);// gpios = 1 oder duty = 1023 funktioniert beides einzeln
-    gpio_set_level(MTR2_PIN2_GPIO, 1);  // duty auf 0 wegen stromverbrauch?
+    //set driver on idle and set duty to 0
+    gpio_set_level(MTR2_PIN1_GPIO, 1);
+    gpio_set_level(MTR2_PIN2_GPIO, 1); 
     ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0));
     ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0));
 }
