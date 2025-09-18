@@ -429,8 +429,10 @@ void app_main(void)
     // Joystick + Rollenerkennung & Senden
     xTaskCreate(joystick_sender_task, "js_sender", 4096, NULL, 9, NULL);
 
-    
-
+        button_led_init();
+        setup_hw_timer_led();
+        motor_init();
+        registerKeyCallback(keyCallback);
 
     while (s_role == ROLE_UNKNOWN) {
         vTaskDelay(500 / portTICK_PERIOD_MS);
@@ -439,27 +441,22 @@ void app_main(void)
         return;
     }
 
-    button_led_init();
-    setup_hw_timer_led();
-    motor_init();
-    registerKeyCallback(keyCallback);
+        ESP_LOGI(TAG, "Starte MQTT");
+        mqtt_app_start();
 
-    
-    ESP_LOGI(TAG, "Starte MQTT");
-    mqtt_app_start();
+        ESP_LOGI(TAG, "Konfiguriere I2C");
+        i2c_master_driver_initialize();
 
-    ESP_LOGI(TAG, "Konfiguriere I2C");
-    i2c_master_driver_initialize();
+        ESP_LOGI(TAG, "Starte Sensoren");
+        sensor_bmx280_init();
+        sensor_sgp30_init();
 
-    ESP_LOGI(TAG, "Starte Sensoren");
-    sensor_bmx280_init();
-    sensor_sgp30_init();
+        ESP_LOGI(TAG, "Warte auf MQTT Verbindung");
+        mqtt_wait_connected(portMAX_DELAY);
 
-    ESP_LOGI(TAG, "Warte auf MQTT Verbindung");
-    mqtt_wait_connected(portMAX_DELAY);
+        ESP_LOGI(TAG, "Starte Sensor Task");
+        xTaskCreate(postSensorData, "sensor_task", 1024 * 2, 0, 10, NULL);
 
-    ESP_LOGI(TAG, "Starte Sensor Task");
-    xTaskCreate(postSensorData, "sensor_task", 1024 * 2, 0, 10, NULL);
 }
 
 
