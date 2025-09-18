@@ -5,8 +5,8 @@
 #include <esp_log.h>
 
 #define BTN_GPIO GPIO_NUM_10
-#define LED1_GPIO GPIO_NUM_6
-#define LED2_GPIO GPIO_NUM_7
+#define LED1_GPIO GPIO_NUM_18
+#define LED2_GPIO GPIO_NUM_19
 
 volatile bool blink_enabled = false;
 
