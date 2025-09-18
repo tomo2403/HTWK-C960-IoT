@@ -2,6 +2,7 @@
 
 static void btn_isr_handler(void* arg);
 static KeyCallback gKeyCallback = NULL;
+volatile bool blink_enabled = false;
 
 void btn_isr_handler(void* arg) {
     (void) arg;

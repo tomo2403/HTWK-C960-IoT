@@ -383,6 +383,7 @@ void postSensorData(void *args)
 #endif
 
         ESP_LOGD(TAG, "TVOC: %s,  eCO2: %s, Temp: %s, Pres: %s, Hum: %s", tvoc_buf, eco2_buf, temp_buf, pres_buf, hum_buf);
+        ESP_LOGI(TAG, "TVOC: %s,  eCO2: %s, Temp: %s, Pres: %s, Hum: %s", tvoc_buf, eco2_buf, temp_buf, pres_buf, hum_buf);
     }
 }
 
@@ -428,10 +429,7 @@ void app_main(void)
     // Joystick + Rollenerkennung & Senden
     xTaskCreate(joystick_sender_task, "js_sender", 4096, NULL, 9, NULL);
 
-    button_led_init();
-    setup_hw_timer_led();
-    motor_init();
-    registerKeyCallback(keyCallback);
+    
 
 
     while (s_role == ROLE_UNKNOWN) {
@@ -440,13 +438,13 @@ void app_main(void)
     if (s_role == ROLE_CONTROLLER) {
         return;
     }
-    if (s_role == ROLE_CAR)
-    {
-        button_led_init();
-        setup_hw_timer_led();
-        motor_init();
-    }
-    /*
+
+    button_led_init();
+    setup_hw_timer_led();
+    motor_init();
+    registerKeyCallback(keyCallback);
+
+    
     ESP_LOGI(TAG, "Starte MQTT");
     mqtt_app_start();
 
@@ -462,7 +460,6 @@ void app_main(void)
 
     ESP_LOGI(TAG, "Starte Sensor Task");
     xTaskCreate(postSensorData, "sensor_task", 1024 * 2, 0, 10, NULL);
-*/
 }
 
 

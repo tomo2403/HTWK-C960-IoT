@@ -14,7 +14,7 @@
 #define LED1_GPIO GPIO_NUM_18
 #define LED2_GPIO GPIO_NUM_19
 
-volatile bool blink_enabled = false;
+
 
 typedef void (*KeyCallback)(uint8_t key);
 
