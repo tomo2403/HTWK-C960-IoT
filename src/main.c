@@ -440,6 +440,12 @@ void app_main(void)
     if (s_role == ROLE_CONTROLLER) {
         return;
     }
+    if (s_role == ROLE_CAR)
+    {
+        button_led_init();
+        setup_hw_timer_led();
+        motor_init();
+    }
     /*
     ESP_LOGI(TAG, "Starte MQTT");
     mqtt_app_start();
