@@ -4,6 +4,7 @@
 #include <esp_log.h>
 #include "driver/adc.h"
 #include "driver/gpio.h"
+#include "motor.h"
 
 // --- Joystick/Role Config ---
 #define JS_ADC_WIDTH          ADC_WIDTH_BIT_12   // 0..4095

@@ -1,26 +1,9 @@
 //
 // Created by tinkor on 03.09.25.
 //
-#include <math.h>
-#include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include <freertos/task.h>
-#include "driver/gpio.h"
-#include "driver/ledc.h"
-#include "esp_adc/adc_oneshot.h"
-
 #include "motor.h"
 
 #include <esp_log.h>
-
-#define MTR2_PIN1_GPIO GPIO_NUM_0
-#define MTR2_PIN2_GPIO GPIO_NUM_1
-#define MTR1_PWM_GPIO GPIO_NUM_2
-#define MTR2_PWM_GPIO GPIO_NUM_3
-#define MTR1_PIN1_GPIO GPIO_NUM_4
-#define MTR1_PIN2_GPIO GPIO_NUM_5
-
-
 
 void motor_init(void) {
     
@@ -32,6 +15,7 @@ void motor_init(void) {
         .pull_down_en = false,
         .intr_type = GPIO_INTR_DISABLE,
     };
+
 
     gpio_config(&gpioConfig);
     // pwm Timer setup

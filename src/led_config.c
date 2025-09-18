@@ -1,14 +1,4 @@
-#include "driver/gpio.h"
-#include "driver/timer.h"
-#include "esp_intr_alloc.h"
 #include "led_config.h"
-#include <esp_log.h>
-
-#define BTN_GPIO GPIO_NUM_10
-#define LED1_GPIO GPIO_NUM_6
-#define LED2_GPIO GPIO_NUM_7
-
-volatile bool blink_enabled = false;
 
 static void btn_isr_handler(void* arg);
 static KeyCallback gKeyCallback = NULL;
