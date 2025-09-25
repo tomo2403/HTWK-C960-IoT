@@ -161,3 +161,9 @@ Temporary Items
 .apdisk
 
 .pio
+secrets.h
+
+.vscode
+build
+sdkconfig
+platformio.ini
