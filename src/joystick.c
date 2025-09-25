@@ -1,7 +1,9 @@
 #include "joystick.h"
 
+
 // Hilfsfunktionen Joystick
 void joystick_init(void) {
+
     adc1_config_width(JS_ADC_WIDTH);
     adc1_config_channel_atten(JS_AXIS_X_CH, JS_ADC_ATTEN);
     adc1_config_channel_atten(JS_AXIS_Y_CH, JS_ADC_ATTEN);
@@ -77,7 +79,26 @@ bool read_button_pressed(void) {
 }
 
 void apply_motor_command_log(int8_t x_pct, int8_t y_pct, bool btn) {
+
+    set_motor1(x_pct);
+    set_motor2(y_pct);
     // Platzhalter-Endpunkt: später Motoren ansteuern
     // y_pct > 0 vorwärts, < 0 rückwärts; x_pct < 0 links, > 0 rechts
     ESP_LOGI("MOTOR", "Cmd: steer=%d%%, throttle=%d%%, btn=%d", (int)x_pct, (int)y_pct, (int)btn);
+}
+
+void led_calib_init() {
+    gpio_config_t gpioConfigIn = {
+        .pin_bit_mask = {1 << LED_CALIB_SWEEP},
+        .mode = GPIO_MODE_INPUT_OUTPUT,
+        .pull_up_en = false,
+        .pull_down_en = false,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&gpioConfigIn);
+}
+
+void led_calib_toggle() {
+    uint32_t level= gpio_get_level(LED_CALIB_SWEEP);
+    gpio_set_level(LED_CALIB_SWEEP, !level);
 }

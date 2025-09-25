@@ -12,8 +12,14 @@
 #include "ntp.h"
 #include "espnow.h"
 #include "joystick.h"
+#include "motor.h"
+#include "driver/gpio.h"
+#include "led_config.h"
+
 
 #define DISABLE_HUMIDITY true
+
+
 
 static const char *TAG = "AppManager";
 
@@ -143,6 +149,8 @@ void on_espnow_recv(const uint8_t mac[6], const uint8_t* data, size_t len, void*
 
                 const bool btn = (cj->buttons & 0x01) != 0;
                 apply_motor_command_log(cj->x_pct, cj->y_pct, btn);
+
+
                 return;
             }
         }
@@ -204,6 +212,9 @@ void joystick_sender_task(void* arg) {
     cal_x.min = cal_x.max = cal_x.mid;
     cal_y.min = cal_y.max = cal_y.mid;
 
+    led_calib_init();
+    led_calib_toggle();
+
     while ((now_ms - start_ms) < JS_CALIB_SWEEP_MS) {
         const int rx = read_raw_axis(JS_AXIS_X_CH);
         const int ry = read_raw_axis(JS_AXIS_Y_CH);
@@ -216,6 +227,7 @@ void joystick_sender_task(void* arg) {
         vTaskDelay(pdMS_TO_TICKS(10));
         now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
     }
+    led_calib_toggle();
 
     // Fallbacks, falls keine Bewegung stattfand
     if (cal_x.min == cal_x.max) { cal_x.min = cal_x.mid - 100; cal_x.max = cal_x.mid + 100; }
@@ -371,8 +383,11 @@ void postSensorData(void *args)
 #endif
 
         ESP_LOGD(TAG, "TVOC: %s,  eCO2: %s, Temp: %s, Pres: %s, Hum: %s", tvoc_buf, eco2_buf, temp_buf, pres_buf, hum_buf);
+        //To debug on serial monitor:
+        //ESP_LOGI(TAG, "TVOC: %s,  eCO2: %s, Temp: %s, Pres: %s, Hum: %s", tvoc_buf, eco2_buf, temp_buf, pres_buf, hum_buf);
     }
 }
+
 
 void app_main(void)
 {
@@ -415,6 +430,11 @@ void app_main(void)
     // Joystick + Rollenerkennung & Senden
     xTaskCreate(joystick_sender_task, "js_sender", 4096, NULL, 9, NULL);
 
+        button_led_init();
+        setup_hw_timer_led();
+        motor_init();
+        registerKeyCallback(keyCallback);
+
     while (s_role == ROLE_UNKNOWN) {
         vTaskDelay(500 / portTICK_PERIOD_MS);
     }
@@ -422,19 +442,22 @@ void app_main(void)
         return;
     }
 
-    ESP_LOGI(TAG, "Starte MQTT");
-    mqtt_app_start();
+        ESP_LOGI(TAG, "Starte MQTT");
+        mqtt_app_start();
 
-    ESP_LOGI(TAG, "Konfiguriere I2C");
-    i2c_master_driver_initialize();
+        ESP_LOGI(TAG, "Konfiguriere I2C");
+        i2c_master_driver_initialize();
 
-    ESP_LOGI(TAG, "Starte Sensoren");
-    sensor_bmx280_init();
-    sensor_sgp30_init();
+        ESP_LOGI(TAG, "Starte Sensoren");
+        sensor_bmx280_init();
+        sensor_sgp30_init();
 
-    ESP_LOGI(TAG, "Warte auf MQTT Verbindung");
-    mqtt_wait_connected(portMAX_DELAY);
+        ESP_LOGI(TAG, "Warte auf MQTT Verbindung");
+        mqtt_wait_connected(portMAX_DELAY);
 
-    ESP_LOGI(TAG, "Starte Sensor Task");
-    xTaskCreate(postSensorData, "sensor_task", 1024 * 2, 0, 10, NULL);
+        ESP_LOGI(TAG, "Starte Sensor Task");
+        xTaskCreate(postSensorData, "sensor_task", 1024 * 2, 0, 10, NULL);
+
 }
+
+

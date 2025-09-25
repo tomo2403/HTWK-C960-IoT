@@ -3,7 +3,7 @@
 
 #include "driver/i2c.h"
 #include "bmx280.h"
-#include "sgp30.h"
+#include "SGP30.h"
 
 #define WRITE_BIT I2C_MASTER_WRITE              /*!< I2C master write */
 #define READ_BIT I2C_MASTER_READ                /*!< I2C master read */
