@@ -25,6 +25,7 @@ void registerKeyCallback(KeyCallback keyCallback) {
 
 void button_led_init() {
 
+    //button setup with pullup and falling edge interrupt
     gpio_config_t gpioConfigIn = {
         .pin_bit_mask = {1 << BTN_GPIO},
         .mode = GPIO_MODE_INPUT,
@@ -34,9 +35,11 @@ void button_led_init() {
     };
     gpio_config(&gpioConfigIn);
 
+    //
     gpio_install_isr_service(0);
     gpio_isr_handler_add(BTN_GPIO, btn_isr_handler, NULL);
 
+    //led setup
     gpio_config_t gpioConfig = {
         .pin_bit_mask = {(1 << LED1_GPIO) | (1 << LED2_GPIO)},
         .mode = GPIO_MODE_INPUT_OUTPUT,
